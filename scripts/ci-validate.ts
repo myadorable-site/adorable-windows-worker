@@ -11,12 +11,18 @@ const REQUIRED_SCRIPTS = [
   "capture-window.ps1",
   "clean.ts",
   "fetch-bundle.ts",
+  "generate-acceptance.ts",
+  "install-deps.ts",
   "package.ts",
+  "pe-validator.ts",
   "r2.ts",
   "report.ts",
+  "run-step.ts",
   "smoke.ts",
+  "source-hash.ts",
   "upload.ts",
   "validate.ts",
+  "verify-toolchain.ts",
 ];
 
 console.log("=== ADORABLE WORKER SCRIPT AUDIT ===");
@@ -45,7 +51,7 @@ if (missingCount > 0) {
 }
 
 console.log("\n=== BUN SYNTAX TRANSPILLATION CHECK ===");
-const tsFiles = readdirSync(scriptsDir).filter(f => f.endsWith(".ts"));
+const tsFiles = readdirSync(scriptsDir).filter((f) => f.endsWith(".ts"));
 for (const file of tsFiles) {
   const filePath = join(scriptsDir, file);
   const result = spawnSync("bun", ["build", filePath, "--no-bundle"], {
