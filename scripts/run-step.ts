@@ -1,13 +1,16 @@
 /**
- * Steps 3 & 4 — execute `quickgui check` and `quickgui build`, capturing structured evidence.
+ * Steps 3 & 4 — execute `quickgui check` and `quickgui build` via verified pinned toolchain.
  *
  * Implements:
+ * - Direct execution of pinned QuickGUI CLI entrypoint (bun <toolchain>/packages/cli/src/cli.ts)
+ * - Explicit QUICKGUI_LIBRARY pointing to verified quickgui_host.dll
+ * - Rejection of floating/unverified CLI (fails closed with QUICKGUI_PROVENANCE_UNVERIFIED)
  * - Unambiguous executable discovery in dist/windows-x64/<AppName>.exe
  * - Initial PE verification on intermediate executable
  * - Structured evidence recording for NativeAcceptanceReport
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadRunResult, saveRunResult } from "./r2.ts";
 import { validateWindowsPe, type PeValidationResult } from "./pe-validator.ts";
@@ -22,11 +25,82 @@ export interface StepExecutionEvidence {
   stderr: string;
   discoveredOutputPaths?: string[];
   peValidation?: PeValidationResult;
+  cliEntrypoint?: string;
+  hostLibrary?: string;
+}
+
+export function resolvePinnedCliCommand(subcommand: "check" | "build"): {
+  cmd: string[];
+  extraEnv: Record<string, string>;
+  cliEntrypoint: string;
+  hostLibrary: string;
+} {
+  const run = loadRunResult();
+  let cliEntrypoint =
+    (run.pinnedCliEntrypoint as string) ||
+    process.env.ADORABLE_QUICKGUI_CLI ||
+    "";
+  let hostLibrary =
+    (run.pinnedHostLibrary as string) ||
+    process.env.QUICKGUI_LIBRARY ||
+    "";
+
+  if (!cliEntrypoint || !existsSync(cliEntrypoint)) {
+    const candidateDirs = [
+      run.pinnedToolchainDir as string,
+      process.env.ADORABLE_QUICKGUI_SOURCE_DIR,
+      process.env.RUNNER_TEMP ? join(process.env.RUNNER_TEMP, "quickgui-pinned") : "",
+    ].filter(Boolean) as string[];
+
+    for (const d of candidateDirs) {
+      const candidateCli = resolve(d, "packages", "cli", "src", "cli.ts");
+      if (existsSync(candidateCli)) {
+        cliEntrypoint = candidateCli;
+        if (!hostLibrary) {
+          const winX64Dll = resolve(d, "packages", "native", "lib", "windows-x64", "quickgui_host.dll");
+          const relDll = resolve(d, "target", "release", "quickgui_host.dll");
+          if (existsSync(winX64Dll)) hostLibrary = winX64Dll;
+          else if (existsSync(relDll)) hostLibrary = relDll;
+        }
+        break;
+      }
+    }
+  }
+
+  // Fallback for mock/synthetic tests if explicitly allowed
+  if ((!cliEntrypoint || !existsSync(cliEntrypoint)) && process.env.ADORABLE_ALLOW_BUNX_FALLBACK === "1") {
+    return {
+      cmd: ["bunx", "quickgui", subcommand],
+      extraEnv: {},
+      cliEntrypoint: "bunx-quickgui-fallback",
+      hostLibrary: "",
+    };
+  }
+
+  if (!cliEntrypoint || !existsSync(cliEntrypoint)) {
+    throw new BuildStepError(
+      "QUICKGUI_PROVENANCE_UNVERIFIED",
+      "Pinned QuickGUI CLI entrypoint (packages/cli/src/cli.ts) not found. Building with unverified/floating CLI is rejected.",
+    );
+  }
+
+  const extraEnv: Record<string, string> = {};
+  if (hostLibrary && existsSync(hostLibrary)) {
+    extraEnv.QUICKGUI_LIBRARY = hostLibrary;
+  }
+
+  return {
+    cmd: ["bun", cliEntrypoint, subcommand],
+    extraEnv,
+    cliEntrypoint,
+    hostLibrary,
+  };
 }
 
 export function executeCommand(
   cmd: string[],
   wsDir: string,
+  extraEnv?: Record<string, string>,
 ): { exitCode: number; stdout: string; stderr: string; durationMs: number; startTime: string; endTime: string } {
   const startTime = new Date().toISOString();
   const t0 = performance.now();
@@ -34,7 +108,7 @@ export function executeCommand(
   const res = spawnSync(cmd[0], cmd.slice(1), {
     cwd: wsDir,
     encoding: "utf8",
-    env: { ...process.env },
+    env: { ...process.env, ...extraEnv },
   });
 
   const t1 = performance.now();
@@ -51,9 +125,10 @@ export function executeCommand(
 }
 
 export function runQuickGuiCheck(wsDir: string): StepExecutionEvidence {
-  console.log("[QuickGUI Check] Running bunx quickgui check...");
-  const cmd = ["bunx", "quickgui", "check"];
-  const res = executeCommand(cmd, wsDir);
+  console.log("[QuickGUI Check] Resolving pinned QuickGUI CLI for check...");
+  const { cmd, extraEnv, cliEntrypoint, hostLibrary } = resolvePinnedCliCommand("check");
+  console.log(`[QuickGUI Check] Executing: ${cmd.join(" ")} in ${wsDir}`);
+  const res = executeCommand(cmd, wsDir, extraEnv);
 
   const evidence: StepExecutionEvidence = {
     command: cmd.join(" "),
@@ -63,6 +138,8 @@ export function runQuickGuiCheck(wsDir: string): StepExecutionEvidence {
     exitCode: res.exitCode,
     stdout: res.stdout,
     stderr: res.stderr,
+    cliEntrypoint,
+    hostLibrary,
   };
 
   saveRunResult({ checkEvidence: evidence });
@@ -82,9 +159,10 @@ export function runQuickGuiCheck(wsDir: string): StepExecutionEvidence {
 }
 
 export function runQuickGuiBuild(wsDir: string): StepExecutionEvidence {
-  console.log("[QuickGUI Build] Running bunx quickgui build...");
-  const cmd = ["bunx", "quickgui", "build"];
-  const res = executeCommand(cmd, wsDir);
+  console.log("[QuickGUI Build] Resolving pinned QuickGUI CLI for build...");
+  const { cmd, extraEnv, cliEntrypoint, hostLibrary } = resolvePinnedCliCommand("build");
+  console.log(`[QuickGUI Build] Executing: ${cmd.join(" ")} in ${wsDir}`);
+  const res = executeCommand(cmd, wsDir, extraEnv);
 
   // Discover output paths in dist/
   const discovered: string[] = [];
@@ -113,6 +191,8 @@ export function runQuickGuiBuild(wsDir: string): StepExecutionEvidence {
     stdout: res.stdout,
     stderr: res.stderr,
     discoveredOutputPaths: discovered,
+    cliEntrypoint,
+    hostLibrary,
   };
 
   saveRunResult({ buildEvidence: evidence });
@@ -214,12 +294,20 @@ if (import.meta.main) {
   const wsDir = loadRunResult().wsDir;
 
   if (action === "check") {
-    const res = runQuickGuiCheck(wsDir);
-    if (res.exitCode !== 0) process.exit(1);
-  } else if (action === "build") {
-    const res = runQuickGuiBuild(wsDir);
-    if (res.exitCode !== 0) process.exit(1);
     try {
+      const res = runQuickGuiCheck(wsDir);
+      if (res.exitCode !== 0) process.exit(1);
+    } catch (err) {
+      const code = (err as { code?: string })?.code || "CHECK_FAILED";
+      const msg = (err as Error)?.message ?? String(err);
+      console.error(`[QuickGUI Check] FAIL CLOSED: ${code} - ${msg}`);
+      saveRunResult({ stepFailed: true, errorCode: code, errorMessage: msg });
+      process.exit(1);
+    }
+  } else if (action === "build") {
+    try {
+      const res = runQuickGuiBuild(wsDir);
+      if (res.exitCode !== 0) process.exit(1);
       discoverAndVerifyIntermediateExe(wsDir);
     } catch (err) {
       const code = (err as { code?: string })?.code || "BUILD_FAILED";

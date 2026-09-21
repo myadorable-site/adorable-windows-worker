@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { loadRunResult, saveRunResult } from "./r2.ts";
+import { validateWindowsPe } from "./pe-validator.ts";
 
 export const PINNED_QUICKGUI_REVISION = "0a5007a03be4a0ba08c7da27010f74699711255";
 export const PINNED_QUICKGUI_REVISION_FULL = "0a5007a03be4a0ba08c7da27010f74699711255a";
@@ -17,6 +19,9 @@ export interface ToolchainVerificationResult {
   nativeVersion?: string;
   solidVersion?: string;
   cliVersion?: string;
+  cliPath?: string;
+  hostLibraryPath?: string;
+  buildStatus?: string;
 }
 
 export function isMatchingRevision(rev: string | undefined): boolean {
@@ -41,7 +46,7 @@ export function verifyQuickGuiToolchain(wsDir: string): ToolchainVerificationRes
     expectedRevision: PINNED_QUICKGUI_REVISION,
   };
 
-  // 1. Read app package.json
+  // 1. Read app package.json if present
   const appPkgPath = join(wsDir, "package.json");
   let appPkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } = {};
   if (existsSync(appPkgPath)) {
@@ -52,7 +57,7 @@ export function verifyQuickGuiToolchain(wsDir: string): ToolchainVerificationRes
     }
   }
 
-  // 2. Discover installed package versions
+  // 2. Discover package versions
   const readPkgVersion = (pkgName: string): string | undefined => {
     const pkgPath = join(wsDir, "node_modules", ...pkgName.split("/"), "package.json");
     if (existsSync(pkgPath)) {
@@ -73,51 +78,121 @@ export function verifyQuickGuiToolchain(wsDir: string): ToolchainVerificationRes
   result.solidVersion = readPkgVersion("@quickgui/solid") ?? "0.1.4-next.4";
   result.cliVersion = readPkgVersion("@quickgui/cli") ?? "0.1.4-next.4";
 
-  // 3. Inspect toolchain provenance evidence
-  // Valid evidence can come from:
-  // - Verified toolchain provenance environment variable / build runner injection
-  // - git commit metadata embedded in resolved packages / lockfile
-  // - package metadata containing source revision (e.g. gitHead or _provenance)
-  const envVerifiedRev = process.env.ADORABLE_QUICKGUI_VERIFIED_REVISION;
-  const envEvidence = process.env.ADORABLE_QUICKGUI_TOOLCHAIN_EVIDENCE;
+  // 3. Inspect pinned toolchain from source repository
+  const run = loadRunResult();
+  const candidateToolchainDirs: string[] = [];
 
-  let verifiedRevision: string | undefined;
-  let evidenceSummary: string | undefined;
+  if (run.pinnedToolchainDir && typeof run.pinnedToolchainDir === "string") {
+    candidateToolchainDirs.push(run.pinnedToolchainDir);
+  }
+  if (process.env.ADORABLE_QUICKGUI_SOURCE_DIR) {
+    candidateToolchainDirs.push(process.env.ADORABLE_QUICKGUI_SOURCE_DIR);
+  }
+  if (process.env.RUNNER_TEMP) {
+    candidateToolchainDirs.push(join(process.env.RUNNER_TEMP, "quickgui-pinned"));
+  }
 
-  if (envVerifiedRev && isMatchingRevision(envVerifiedRev)) {
-    verifiedRevision = envVerifiedRev;
-    evidenceSummary = envEvidence || `Verified via runner toolchain attestation for revision ${envVerifiedRev}`;
-  } else {
-    // Inspect installed packages for git revision
-    const cliPkgPath = join(wsDir, "node_modules", "@quickgui", "cli", "package.json");
-    if (existsSync(cliPkgPath)) {
-      try {
-        const cliJson = JSON.parse(readFileSync(cliPkgPath, "utf8")) as Record<string, unknown>;
-        if (typeof cliJson.gitHead === "string" && isMatchingRevision(cliJson.gitHead)) {
-          verifiedRevision = cliJson.gitHead;
-          evidenceSummary = `Package @quickgui/cli gitHead: ${cliJson.gitHead}`;
-        } else if (cliJson.provenance && typeof (cliJson.provenance as Record<string, unknown>).gitCommit === "string") {
-          const rev = (cliJson.provenance as Record<string, unknown>).gitCommit as string;
-          if (isMatchingRevision(rev)) {
-            verifiedRevision = rev;
-            evidenceSummary = `Package @quickgui/cli provenance gitCommit: ${rev}`;
-          }
+  let verifiedViaSource = false;
+
+  for (const dir of candidateToolchainDirs) {
+    const absDir = resolve(dir);
+    if (!existsSync(absDir)) continue;
+
+    // Check that git is actually inspecting absDir and not an ancestor repository
+    const topLevelCheck = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: absDir,
+      encoding: "utf8",
+    });
+    if (topLevelCheck.status !== 0) continue;
+    const topLevel = resolve((topLevelCheck.stdout || "").trim());
+    if (topLevel.toLowerCase() !== absDir.toLowerCase()) continue;
+
+    // Check git rev-parse HEAD in toolchain dir
+    const revCheck = spawnSync("git", ["rev-parse", "HEAD"], {
+      cwd: absDir,
+      encoding: "utf8",
+    });
+
+    if (revCheck.status === 0) {
+      const commit = (revCheck.stdout || "").trim();
+      if (isMatchingRevision(commit)) {
+        // Verify CLI entrypoint exists
+        const cliPath = join(absDir, "packages", "cli", "src", "cli.ts");
+        if (!existsSync(cliPath)) {
+          console.warn(`[Toolchain Verify] Pinned CLI not found at ${cliPath}`);
+          continue;
         }
-      } catch {
-        /* ignore */
+
+        // Verify native host library exists and is valid AMD64 PE
+        const hostDllPath = join(absDir, "packages", "native", "lib", "windows-x64", "quickgui_host.dll");
+        const releaseDllPath = join(absDir, "target", "release", "quickgui_host.dll");
+        const selectedDll = existsSync(hostDllPath) ? hostDllPath : existsSync(releaseDllPath) ? releaseDllPath : "";
+
+        if (!selectedDll) {
+          console.warn("[Toolchain Verify] Native host library not found in toolchain dir");
+          continue;
+        }
+
+        const peRes = validateWindowsPe(selectedDll);
+        if (!peRes.valid) {
+          console.warn(`[Toolchain Verify] Native host library PE invalid: ${peRes.error}`);
+          continue;
+        }
+
+        result.verified = true;
+        result.verifiedRevision = commit;
+        result.cliPath = cliPath;
+        result.hostLibraryPath = selectedDll;
+        result.buildStatus = "built";
+        result.evidence = `Git checkout verified at commit ${commit} (HEAD: ${commit}), CLI: ${cliPath}, host PE: ${peRes.sha256}`;
+
+        saveRunResult({
+          quickguiToolchain: result,
+          pinnedToolchainDir: absDir,
+          pinnedCliEntrypoint: cliPath,
+          pinnedHostLibrary: selectedDll,
+        });
+
+        verifiedViaSource = true;
+        break;
       }
     }
   }
 
-  if (verifiedRevision && isMatchingRevision(verifiedRevision)) {
+  if (verifiedViaSource) {
+    return result;
+  }
+
+  // 4. Test harness & runner environment variable override (for unit tests / mock harness)
+  const envVerifiedRev = process.env.ADORABLE_QUICKGUI_VERIFIED_REVISION;
+  const envEvidence = process.env.ADORABLE_QUICKGUI_TOOLCHAIN_EVIDENCE;
+
+  if (envVerifiedRev && isMatchingRevision(envVerifiedRev)) {
     result.verified = true;
-    result.verifiedRevision = verifiedRevision;
-    result.evidence = evidenceSummary;
+    result.verifiedRevision = envVerifiedRev;
+    result.evidence = envEvidence || `Verified via runner toolchain attestation for revision ${envVerifiedRev}`;
     saveRunResult({ quickguiToolchain: result });
     return result;
   }
 
-  // FAILED CLOSED: Cannot establish exact revision equivalence without inventing evidence
+  // 5. Inspect installed packages for git revision metadata (fallback)
+  const cliPkgPath = join(wsDir, "node_modules", "@quickgui", "cli", "package.json");
+  if (existsSync(cliPkgPath)) {
+    try {
+      const cliJson = JSON.parse(readFileSync(cliPkgPath, "utf8")) as Record<string, unknown>;
+      if (typeof cliJson.gitHead === "string" && isMatchingRevision(cliJson.gitHead)) {
+        result.verified = true;
+        result.verifiedRevision = cliJson.gitHead;
+        result.evidence = `Package @quickgui/cli gitHead: ${cliJson.gitHead}`;
+        saveRunResult({ quickguiToolchain: result });
+        return result;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // FAILED CLOSED: Cannot establish exact revision equivalence without verified evidence
   result.verified = false;
   result.errorCode = "QUICKGUI_PROVENANCE_UNVERIFIED";
   result.errorMessage = `QuickGUI toolchain provenance could not be verified against pinned revision ${PINNED_QUICKGUI_REVISION}. Claims without cryptographic/lockfile/attestation evidence are rejected.`;

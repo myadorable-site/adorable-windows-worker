@@ -18,6 +18,7 @@ const REQUIRED_SCRIPTS = [
   "r2.ts",
   "report.ts",
   "run-step.ts",
+  "setup-toolchain.ts",
   "smoke.ts",
   "source-hash.ts",
   "upload.ts",
