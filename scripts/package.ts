@@ -246,6 +246,7 @@ namespace AdorableLauncher
       const cscArgs = [
         cscPath,
         "/target:winexe",
+        "/platform:x64",
         "/optimize+",
         "/r:System.IO.Compression.dll",
         "/r:System.IO.Compression.FileSystem.dll",
