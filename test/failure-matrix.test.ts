@@ -45,6 +45,7 @@ import {
 import { buildCallbackPayload } from "../scripts/report.ts";
 import { saveRunResult, loadRunResult } from "../scripts/r2.ts";
 import { validatePngHeader } from "../scripts/smoke.ts";
+import { runSecurityValidation } from "../scripts/validate.ts";
 
 const TEST_DIR = join(import.meta.dir, ".tmp-test-" + Date.now());
 
@@ -606,5 +607,56 @@ describe("Decision Harness v0.9B: Failure Matrix & Native Acceptance", () => {
     expect(payload.artifact_sha256).toBe(peRes.sha256);
     expect(payload.preview_sha256).toBe("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
     expect(payload.release_status).toEqual(["BUILD_SUCCEEDED", "ACCEPTED"]);
+  });
+
+  // 20. Security validation allows runtime/adorable-store.ts with process.env on Windows
+  it("20. security validation ignores runtime/adorable-store.ts with process.env references", () => {
+    const ws = join(TEST_DIR, "sec-clean-ws");
+    mkdirSync(join(ws, "runtime"), { recursive: true });
+    mkdirSync(join(ws, "src"), { recursive: true });
+    writeFileSync(
+      join(ws, "package.json"),
+      JSON.stringify({
+        dependencies: {
+          "@quickgui/native": "0.1.4-next.4",
+          "@quickgui/solid": "0.1.4-next.4",
+          "solid-js": "^1.8.0",
+        },
+      })
+    );
+    writeFileSync(
+      join(ws, "runtime", "adorable-store.ts"),
+      'export const ADORABLE_APP_DATA_DIR_ENV = "ADORABLE_APP_DATA_DIR";\nconst procEnv = (process as any)?.env || {};\n'
+    );
+    writeFileSync(
+      join(ws, "src", "index.tsx"),
+      'export default function App() { return <div>Hello World</div>; }\n'
+    );
+
+    const res = runSecurityValidation(ws);
+    expect(res.ok).toBe(true);
+    expect(res.findings.length).toBe(0);
+  });
+
+  // 21. Security validation rejects forbidden secret patterns in app sources
+  it("21. security validation rejects forbidden secret patterns in app sources", () => {
+    const ws = join(TEST_DIR, "sec-bad-ws");
+    mkdirSync(join(ws, "src"), { recursive: true });
+    writeFileSync(
+      join(ws, "package.json"),
+      JSON.stringify({
+        dependencies: {
+          "@quickgui/native": "0.1.4-next.4",
+        },
+      })
+    );
+    writeFileSync(
+      join(ws, "src", "index.tsx"),
+      'const key = "sk-or-v1-12345678abcdef0123456789";\n'
+    );
+
+    const res = runSecurityValidation(ws);
+    expect(res.ok).toBe(false);
+    expect(res.findings.some((f) => f.code === "SECRET_PATTERN")).toBe(true);
   });
 });

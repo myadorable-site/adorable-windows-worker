@@ -143,7 +143,8 @@ export function runSecurityValidation(wsDir: string): SecurityScanResult {
   for (const full of files) {
     const rel = relative(wsDir, full);
     if (!(full.endsWith(".tsx") || full.endsWith(".ts") || full.endsWith(".js") || full.endsWith(".json"))) continue;
-    if (full.includes(`runtime${"/"}adorable-store.ts`)) continue;
+    const normalizedRel = rel.replace(/\\/g, "/");
+    if (normalizedRel === "runtime/adorable-store.ts" || full.replace(/\\/g, "/").includes("runtime/adorable-store.ts")) continue;
     const content = read(full);
     if (!content) continue;
 
