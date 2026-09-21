@@ -5,17 +5,22 @@
  * A. If bun.lock is present: bun install --ignore-scripts --frozen-lockfile
  * B. If bun.lock is absent: documented bun install --ignore-scripts, recording resolved dependency versions
  *
+ * After dependency installation, non-destructively overlays @quickgui/* from the verified
+ * pinned toolchain without modifying the app's package.json or source files.
+ *
  * Fails closed on any error with DEPENDENCY_INSTALL_FAILED.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadRunResult, saveRunResult } from "./r2.ts";
+import { overlayPinnedToolchain } from "./setup-toolchain.ts";
 
 export interface ResolvedDependencyProvenance {
   strategy: "frozen-lockfile" | "non-frozen-recorded";
   lockfilePresent: boolean;
   installedPackages: Record<string, string>;
+  toolchainOverlay?: boolean;
 }
 
 export function installDependencies(wsDir: string): ResolvedDependencyProvenance {
@@ -79,14 +84,33 @@ export function installDependencies(wsDir: string): ResolvedDependencyProvenance
 
   scanDir(nodeModulesDir);
 
+  // Non-destructive overlay of pinned QuickGUI packages
+  let toolchainOverlay = false;
+  const run = loadRunResult();
+  const candidateToolchainDirs = [
+    run.pinnedToolchainDir as string,
+    process.env.ADORABLE_QUICKGUI_SOURCE_DIR,
+    process.env.RUNNER_TEMP ? join(process.env.RUNNER_TEMP, "quickgui-pinned") : "",
+  ].filter(Boolean) as string[];
+
+  for (const dir of candidateToolchainDirs) {
+    if (existsSync(dir)) {
+      console.log(`[Install] Overlaying pinned QuickGUI packages from ${dir}...`);
+      overlayPinnedToolchain(wsDir, dir);
+      toolchainOverlay = true;
+      break;
+    }
+  }
+
   const depResult: ResolvedDependencyProvenance = {
     strategy,
     lockfilePresent,
     installedPackages,
+    toolchainOverlay,
   };
 
   saveRunResult({ dependencyProvenance: depResult });
-  console.log(`[Install] Successfully resolved ${Object.keys(installedPackages).length} dependencies.`);
+  console.log(`[Install] Successfully resolved ${Object.keys(installedPackages).length} dependencies (toolchain overlay: ${toolchainOverlay}).`);
   return depResult;
 }
 

@@ -64,6 +64,15 @@ export interface NativeAcceptanceReport {
   gateDecisions: NativeAcceptanceGateDecisions;
   blockers: string[];
   evidence: NativeAcceptanceEvidence[];
+  toolchain?: {
+    repository: string;
+    expectedRevision: string;
+    verifiedRevision?: string;
+    evidence?: string;
+    cliPath?: string;
+    hostLibraryPath?: string;
+    buildStatus?: string;
+  };
   artifactHashes: {
     executableSha256?: string;
     previewSha256?: string;
@@ -80,6 +89,15 @@ export interface NativeGenerationResult {
   quickguiRevision: string;
   targetPlatform: string;
   targetArch: string;
+  toolchain?: {
+    repository: string;
+    expectedRevision: string;
+    verifiedRevision?: string;
+    evidence?: string;
+    cliPath?: string;
+    hostLibraryPath?: string;
+    buildStatus?: string;
+  };
   contractValidation: {
     valid: boolean;
     score: number;
@@ -286,12 +304,23 @@ export function buildAcceptanceReport(wsDir: string): {
   ].join("\n");
   const provenanceDigest = createHash("sha256").update(provString, "utf8").digest("hex");
 
+  const toolchainMeta = toolchain ? {
+    repository: toolchain.repository || "https://github.com/egoist/quickgui.git",
+    expectedRevision: toolchain.expectedRevision || "0a5007a03be4a0ba08c7da27010f74699711255",
+    verifiedRevision: toolchain.verifiedRevision,
+    evidence: toolchain.evidence,
+    cliPath: toolchain.cliPath,
+    hostLibraryPath: toolchain.hostLibraryPath,
+    buildStatus: toolchain.buildStatus || (toolchain.verified ? "built" : undefined),
+  } : undefined;
+
   const generationResult: NativeGenerationResult = {
     generationContractHash: contractHash,
     sourceBundleHash,
     quickguiRevision,
     targetPlatform,
     targetArch,
+    toolchain: toolchainMeta,
     contractValidation: {
       valid: gate1Pass,
       score: gate1Pass ? 1.0 : 0.0,
@@ -336,6 +365,7 @@ export function buildAcceptanceReport(wsDir: string): {
     quickguiRevision,
     targetPlatform,
     targetArch,
+    toolchain: toolchainMeta,
     gateDecisions,
     blockers,
     evidence: evidenceList,

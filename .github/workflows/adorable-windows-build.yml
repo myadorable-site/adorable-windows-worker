@@ -96,6 +96,15 @@ jobs:
         with:
           bun-version: 1.4.2
 
+      - name: Cache pinned QuickGUI toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/quickgui-pinned
+          key: quickgui-source-${{ inputs.quickgui_revision }}
+
+      - name: Stage pinned QuickGUI source repository & build host
+        run: bun ./scripts/setup-toolchain.ts
+
       - name: Fetch + verify source bundle & non-circular hash
         run: bun ./scripts/fetch-bundle.ts
 
