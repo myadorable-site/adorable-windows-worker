@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Step 3b — package the built QuickGUI Windows executable into a truly standalone,
  * self-contained .exe that launches standalone without companion DLLs or dev tools.
  *
@@ -11,10 +11,15 @@
  * quickgui_host.dll. This step embeds quickgui_host.dll and the payload application into
  * a single self-extracting runner using Windows built-in csc.exe, replacing the loose .exe
  * with a self-contained portable executable.
+ *
+ * MANDATORY v0.9B REQUIREMENT:
+ * Re-runs PE validation on the FINAL packaged executable. The artifact uploaded to R2
+ * MUST be the same final executable that passed final PE validation and will be launched.
  */
 import { existsSync, readdirSync, statSync, mkdirSync, copyFileSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { loadRunResult } from "./r2.ts";
+import { loadRunResult, saveRunResult } from "./r2.ts";
+import { validateWindowsPe, type PeValidationResult } from "./pe-validator.ts";
 
 export function findExe(dir: string): string | null {
   let entries: string[] = [];
@@ -41,7 +46,10 @@ export function findExe(dir: string): string | null {
   return null;
 }
 
-export function packageStandaloneWindows(wsDir: string): string | null {
+export function packageStandaloneWindows(wsDir: string): {
+  finalExe: string;
+  finalPeValidation: PeValidationResult;
+} | null {
   const distDir = join(wsDir, "dist");
   if (!existsSync(distDir)) return null;
 
@@ -50,68 +58,67 @@ export function packageStandaloneWindows(wsDir: string): string | null {
 
   const winDir = dirname(mainExe);
   const dllPath = join(winDir, "quickgui_host.dll");
-  if (!existsSync(dllPath)) {
-    // Already standalone or no host DLL needed
-    return mainExe;
-  }
 
-  const appBaseName = basename(mainExe, ".exe");
-  const tempStaging = join(wsDir, `.package-staging-${Date.now()}`);
-  const payloadZip = join(wsDir, `.payload-${Date.now()}.zip`);
-  const launcherCs = join(wsDir, `.launcher-${Date.now()}.cs`);
-  const launcherExe = join(wsDir, `.launcher-${Date.now()}.exe`);
+  let finalExe = mainExe;
 
-  try {
-    mkdirSync(tempStaging, { recursive: true });
+  if (existsSync(dllPath)) {
+    const appBaseName = basename(mainExe, ".exe");
+    const tempStaging = join(wsDir, `.package-staging-${Date.now()}`);
+    const payloadZip = join(wsDir, `.payload-${Date.now()}.zip`);
+    const launcherCs = join(wsDir, `.launcher-${Date.now()}.cs`);
+    const launcherExe = join(wsDir, `.launcher-${Date.now()}.exe`);
 
-    // Stage payload: main binary as app_payload.exe, plus quickgui_host.dll and other assets
-    copyFileSync(mainExe, join(tempStaging, "app_payload.exe"));
-    copyFileSync(dllPath, join(tempStaging, "quickgui_host.dll"));
-
-    // Copy any fonts or resources directory if present
-    const fontsDir = join(winDir, "fonts");
-    if (existsSync(fontsDir)) {
-      copyDirRecursive(fontsDir, join(tempStaging, "fonts"));
-    }
-    const resourcesDir = join(winDir, "resources");
-    if (existsSync(resourcesDir)) {
-      copyDirRecursive(resourcesDir, join(tempStaging, "resources"));
-    }
-
-    // Create zip archive using tar.exe (built-in Windows 10/11/Server) or PowerShell Compress-Archive
-    let zipSuccess = false;
     try {
-      const tarRes = Bun.spawnSync(["tar.exe", "-a", "-c", "-f", payloadZip, "-C", tempStaging, "."], {
-        stdin: "ignore",
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      if (tarRes.exitCode === 0 && existsSync(payloadZip) && statSync(payloadZip).size > 0) {
-        zipSuccess = true;
-      }
-    } catch {
-      /* fallback */
-    }
+      mkdirSync(tempStaging, { recursive: true });
 
-    if (!zipSuccess) {
-      const psRes = Bun.spawnSync(
-        [
-          "powershell.exe",
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-Command",
-          `Compress-Archive -Path "${tempStaging}\\*" -DestinationPath "${payloadZip}" -Force`,
-        ],
-        { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
-      );
-      if (psRes.exitCode !== 0 || !existsSync(payloadZip) || statSync(payloadZip).size === 0) {
-        throw new Error("Failed to create payload zip for standalone packaging");
-      }
-    }
+      // Stage payload: main binary as app_payload.exe, plus quickgui_host.dll and other assets
+      copyFileSync(mainExe, join(tempStaging, "app_payload.exe"));
+      copyFileSync(dllPath, join(tempStaging, "quickgui_host.dll"));
 
-    // Write launcher C# source code
-    const csCode = `using System;
+      // Copy any fonts or resources directory if present
+      const fontsDir = join(winDir, "fonts");
+      if (existsSync(fontsDir)) {
+        copyDirRecursive(fontsDir, join(tempStaging, "fonts"));
+      }
+      const resourcesDir = join(winDir, "resources");
+      if (existsSync(resourcesDir)) {
+        copyDirRecursive(resourcesDir, join(tempStaging, "resources"));
+      }
+
+      // Create zip archive using tar.exe or PowerShell Compress-Archive
+      let zipSuccess = false;
+      try {
+        const tarRes = Bun.spawnSync(["tar.exe", "-a", "-c", "-f", payloadZip, "-C", tempStaging, "."], {
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        if (tarRes.exitCode === 0 && existsSync(payloadZip) && statSync(payloadZip).size > 0) {
+          zipSuccess = true;
+        }
+      } catch {
+        /* fallback */
+      }
+
+      if (!zipSuccess) {
+        const psRes = Bun.spawnSync(
+          [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            `Compress-Archive -Path "${tempStaging}\\*" -DestinationPath "${payloadZip}" -Force`,
+          ],
+          { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+        );
+        if (psRes.exitCode !== 0 || !existsSync(payloadZip) || statSync(payloadZip).size === 0) {
+          throw new PackagingError("PACKAGING_FAILED", "Failed to create payload zip for standalone packaging");
+        }
+      }
+
+      // Write launcher C# source code
+      const csCode = `using System;
 using System.IO;
 using System.IO.Compression;
 using System.Diagnostics;
@@ -218,72 +225,86 @@ namespace AdorableLauncher
     }
 }
 `;
-    writeFileSync(launcherCs, csCode, "utf8");
+      writeFileSync(launcherCs, csCode, "utf8");
 
-    // Find csc.exe
-    const cscCandidates = [
-      "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe",
-      "C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\csc.exe",
-    ];
-    let cscPath: string | undefined;
-    for (const cand of cscCandidates) {
-      if (existsSync(cand)) {
-        cscPath = cand;
-        break;
+      // Find csc.exe
+      const cscCandidates = [
+        "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe",
+        "C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\csc.exe",
+      ];
+      let cscPath: string | undefined;
+      for (const cand of cscCandidates) {
+        if (existsSync(cand)) {
+          cscPath = cand;
+          break;
+        }
       }
+      if (!cscPath) {
+        throw new PackagingError("PACKAGING_FAILED", "csc.exe not found; cannot package standalone launcher.");
+      }
+
+      const cscArgs = [
+        cscPath,
+        "/target:winexe",
+        "/optimize+",
+        "/r:System.IO.Compression.dll",
+        "/r:System.IO.Compression.FileSystem.dll",
+        `/resource:${payloadZip},payload.zip`,
+        `/out:${launcherExe}`,
+      ];
+
+      const manifestCandidate = `${mainExe}.manifest`;
+      if (existsSync(manifestCandidate)) {
+        cscArgs.push(`/win32manifest:${manifestCandidate}`);
+      }
+
+      const icoCandidate = join(winDir, `${appBaseName}.ico`);
+      if (existsSync(icoCandidate)) {
+        cscArgs.push(`/win32icon:${icoCandidate}`);
+      }
+
+      cscArgs.push(launcherCs);
+
+      const cscRes = Bun.spawnSync(cscArgs, { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      if (cscRes.exitCode !== 0 || !existsSync(launcherExe)) {
+        const errText = new TextDecoder().decode(cscRes.stderr);
+        throw new PackagingError("PACKAGING_FAILED", `csc.exe compilation failed: ${errText}`);
+      }
+
+      // Replace mainExe with the standalone launcher
+      copyFileSync(launcherExe, mainExe);
+
+      // Clean up loose quickgui_host.dll from dist so dist contains only the self-contained executable
+      try {
+        unlinkSync(dllPath);
+      } catch {
+        /* ignore */
+      }
+
+      finalExe = mainExe;
+      console.log(`[Package] Packaged standalone self-contained executable: ${finalExe} (${statSync(finalExe).size} bytes).`);
+    } finally {
+      try { rmSync(tempStaging, { recursive: true, force: true }); } catch { /* ignore */ }
+      try { unlinkSync(payloadZip); } catch { /* ignore */ }
+      try { unlinkSync(launcherCs); } catch { /* ignore */ }
+      try { unlinkSync(launcherExe); } catch { /* ignore */ }
     }
-    if (!cscPath) {
-      console.warn("csc.exe not found; cannot package standalone launcher. Leaving original executable.");
-      return mainExe;
-    }
-
-    const cscArgs = [
-      cscPath,
-      "/target:winexe",
-      "/optimize+",
-      "/r:System.IO.Compression.dll",
-      "/r:System.IO.Compression.FileSystem.dll",
-      `/resource:${payloadZip},payload.zip`,
-      `/out:${launcherExe}`,
-    ];
-
-    const manifestCandidate = `${mainExe}.manifest`;
-    if (existsSync(manifestCandidate)) {
-      cscArgs.push(`/win32manifest:${manifestCandidate}`);
-    }
-
-    const icoCandidate = join(winDir, `${appBaseName}.ico`);
-    if (existsSync(icoCandidate)) {
-      cscArgs.push(`/win32icon:${icoCandidate}`);
-    }
-
-    cscArgs.push(launcherCs);
-
-    const cscRes = Bun.spawnSync(cscArgs, { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-    if (cscRes.exitCode !== 0 || !existsSync(launcherExe)) {
-      const errText = new TextDecoder().decode(cscRes.stderr);
-      console.warn("csc.exe compilation failed:", errText);
-      return mainExe;
-    }
-
-    // Replace mainExe with the standalone launcher
-    copyFileSync(launcherExe, mainExe);
-
-    // Clean up loose quickgui_host.dll from dist so dist contains only the self-contained executable
-    try {
-      unlinkSync(dllPath);
-    } catch {
-      /* ignore */
-    }
-
-    console.log(`[Package] Packaged standalone self-contained executable: ${mainExe} (${statSync(mainExe).size} bytes).`);
-    return mainExe;
-  } finally {
-    try { rmSync(tempStaging, { recursive: true, force: true }); } catch { /* ignore */ }
-    try { unlinkSync(payloadZip); } catch { /* ignore */ }
-    try { unlinkSync(launcherCs); } catch { /* ignore */ }
-    try { unlinkSync(launcherExe); } catch { /* ignore */ }
   }
+
+  // MANDATORY: Re-run PE validation on the final executable candidate
+  const peRes = validateWindowsPe(finalExe);
+  if (!peRes.valid) {
+    throw new PackagingError("CORRUPT_PE", `Final standalone executable PE validation failed: ${peRes.error}`);
+  }
+
+  saveRunResult({
+    finalExe,
+    finalPeValidation: peRes,
+    artifactSha256: peRes.sha256,
+    artifactSize: peRes.fileSize,
+  });
+
+  return { finalExe, finalPeValidation: peRes };
 }
 
 function copyDirRecursive(src: string, dest: string): void {
@@ -299,13 +320,30 @@ function copyDirRecursive(src: string, dest: string): void {
   }
 }
 
+export class PackagingError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+    this.name = "PackagingError";
+  }
+}
+
 // When run directly as CLI step:
 if (import.meta.main) {
   const wsDir = loadRunResult().wsDir;
-  const packaged = packageStandaloneWindows(wsDir);
-  if (packaged) {
-    console.log(`Standalone packaging completed for ${packaged}.`);
-  } else {
-    console.log("Standalone packaging skipped (no executable found).");
+  try {
+    const res = packageStandaloneWindows(wsDir);
+    if (res) {
+      console.log(`Standalone packaging completed and verified for ${res.finalExe}.`);
+    } else {
+      throw new PackagingError("PACKAGING_FAILED", "No executable found in workspace dist to package.");
+    }
+  } catch (err) {
+    const code = (err as { code?: string })?.code || "PACKAGING_FAILED";
+    const msg = (err as Error)?.message ?? String(err);
+    console.error(`[Package] FAIL CLOSED: ${code} - ${msg}`);
+    saveRunResult({ stepFailed: true, errorCode: code, errorMessage: msg });
+    process.exit(1);
   }
 }

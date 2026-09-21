@@ -1,95 +1,218 @@
 /**
- * Step 5 — best-effort native smoke on headless runners.
+ * Step 5 — mandatory native smoke test & preview capture.
  *
- * Launches the built executable briefly to prove it starts, then always
- * terminates the tree. NEVER fails the build: headless CI sessions may
- * lack a visible desktop, so the outcome is recorded honestly
- * (launchOk true/false) for the backend to surface.
+ * Ground rules (v0.9B):
+ * 1. Process starts
+ * 2. Process remains alive through the required settle interval
+ * 3. Process does NOT terminate early (even with exit code 0!)
+ * 4. Native window is discovered and verified to belong to process or child
+ * 5. Screenshot capture succeeds with valid PNG header bytes and non-zero size
+ *
+ * FAIL CLOSED:
+ * - SMOKE_FAILED if process exits early, crashes, or window is not found
+ * - PREVIEW_CAPTURE_FAILED if preview screenshot is missing or corrupted
  */
-import { existsSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { loadRunResult, saveRunResult } from "./r2.ts";
 
-function findExe(dir: string): string | null {
-  let entries: string[] = [];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return null;
-  }
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    let isDir = false;
-    try {
-      isDir = statSync(full).isDirectory();
-    } catch {
-      continue;
-    }
-    if (isDir) {
-      const nested = findExe(full);
-      if (nested) return nested;
-    } else if (entry.toLowerCase().endsWith(".exe")) {
-      return full;
-    }
-  }
-  return null;
+export interface SmokeTestResult {
+  passed: boolean;
+  errorCode?: string;
+  errorMessage?: string;
+  pid?: number;
+  childPids?: number[];
+  startTime?: string;
+  settleDurationMs?: number;
+  exitCode?: number | null;
+  aliveStatus: boolean;
+  windowHandle?: string;
+  windowDiscoveryTimeMs?: number;
+  previewCaptured: boolean;
+  previewSha256?: string;
+  previewSize?: number;
 }
 
-import { packageStandaloneWindows } from "./package.ts";
-
-const wsDir = loadRunResult().wsDir;
-packageStandaloneWindows(wsDir);
-const exe = findExe(join(wsDir, "dist"));
-if (!exe || !existsSync(exe)) {
-  saveRunResult({ launchOk: false, launchNote: "no-executable" });
-  console.log("Smoke skipped: no executable found.");
-  process.exit(0);
+export function validatePngHeader(bytes: Uint8Array): boolean {
+  // PNG Magic Header: 89 50 4E 47 0D 0A 1A 0A
+  const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.length < 8) return false;
+  for (let i = 0; i < 8; i++) {
+    if (bytes[i] !== PNG_MAGIC[i]) return false;
+  }
+  return true;
 }
 
-let child: ReturnType<typeof Bun.spawn> | null = null;
-let previewOk = false;
-try {
-  child = Bun.spawn([exe], { cwd: join(exe, ".."), stdin: "ignore", stdout: "ignore", stderr: "ignore" });
-  // Best-effort screenshot (pinned copy of the backend capture helper).
-  // Headless runners may yield no window; that is recorded, not fatal.
+export async function runNativeSmokeTest(
+  exePath: string,
+  wsDir: string,
+  settleMs = 5000,
+): Promise<SmokeTestResult> {
+  const result: SmokeTestResult = {
+    passed: false,
+    aliveStatus: false,
+    previewCaptured: false,
+  };
+
+  if (!exePath || !existsSync(exePath)) {
+    result.errorCode = "SMOKE_FAILED";
+    result.errorMessage = `Executable not found for smoke test: ${exePath}`;
+    return result;
+  }
+
+  const startTime = new Date().toISOString();
+  result.startTime = startTime;
+  const t0 = performance.now();
+
+  let child: ReturnType<typeof Bun.spawn> | null = null;
+  let pid: number | undefined;
+
   try {
-    const pid = (child as unknown as { pid: number }).pid;
+    child = Bun.spawn([exePath], {
+      cwd: join(exePath, ".."),
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    pid = (child as unknown as { pid: number }).pid;
+    result.pid = pid;
+
+    // Check window discovery and capture preview using capture-window.ps1
     const script = join(import.meta.dir, "capture-window.ps1");
     const outPng = join(wsDir, "artifacts", "preview.png");
     mkdirSync(join(wsDir, "artifacts"), { recursive: true });
-    const cap = Bun.spawnSync(
-      ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, "-ProcessId", String(pid), "-OutputPath", outPng, "-TimeoutMs", "20000"],
+
+    const winCaptureStart = performance.now();
+    const capRes = Bun.spawnSync(
+      [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        script,
+        "-ProcessId",
+        String(pid),
+        "-OutputPath",
+        outPng,
+        "-TimeoutMs",
+        "15000",
+      ],
       { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
     );
-    const text = new TextDecoder().decode(cap.stdout).trim();
-    if (text.startsWith("SUCCESS:") && existsSync(outPng)) previewOk = true;
-  } catch {
-    /* preview best-effort */
-  }
-  await new Promise((r) => setTimeout(r, 8000));
-  const exitCode = (child as unknown as { exitCode: number | null }).exitCode;
-  if (exitCode !== null && exitCode !== 0) {
-    saveRunResult({ launchOk: false, previewOk, launchNote: `immediate-exit-${exitCode}` });
-    console.log(`Smoke: immediate exit ${exitCode}.`);
-  } else {
-    saveRunResult({ launchOk: true, previewOk });
-    console.log(`Smoke: process alive after settle window (preview ${previewOk ? "captured" : "unavailable"}).`);
-  }
-} catch (err) {
-  saveRunResult({ launchOk: false, launchNote: String((err as Error)?.message ?? err).slice(0, 120) });
-  console.log("Smoke: launch threw; recorded honestly.");
-} finally {
-  if (child) {
-    const pid = (child as unknown as { pid: number }).pid;
-    try {
-      Bun.spawnSync(["taskkill", "/PID", String(pid), "/T", "/F"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
-    } catch {
-      /* ignore */
+
+    const winCaptureElapsed = Math.round(performance.now() - winCaptureStart);
+    result.windowDiscoveryTimeMs = winCaptureElapsed;
+
+    const capOutput = new TextDecoder().decode(capRes.stdout).trim();
+    if (capOutput.startsWith("SUCCESS:")) {
+      result.windowHandle = capOutput;
     }
-    try {
-      (child as unknown as { kill: () => void }).kill();
-    } catch {
-      /* ignore */
+
+    // Wait for the required settle duration
+    await new Promise((r) => setTimeout(r, settleMs));
+
+    const totalDuration = Math.round(performance.now() - t0);
+    result.settleDurationMs = totalDuration;
+
+    // CRITICAL: Check process lifetime
+    // If exitCode !== null, the process exited early (even code 0 is an error for desktop GUI!)
+    const exitCode = (child as unknown as { exitCode: number | null }).exitCode;
+    result.exitCode = exitCode;
+
+    if (exitCode !== null) {
+      result.aliveStatus = false;
+      result.errorCode = "SMOKE_FAILED";
+      result.errorMessage = `Application exited early (exitCode=${exitCode}) during the settle window. Desktop GUI applications must remain active.`;
+      console.error(`[Smoke] FAIL: ${result.errorMessage}`);
+      return result;
     }
+
+    result.aliveStatus = true;
+
+    // Verify native window was found
+    if (!capOutput.startsWith("SUCCESS:")) {
+      result.errorCode = "SMOKE_FAILED";
+      result.errorMessage = `Native window discovery failed: ${capOutput || new TextDecoder().decode(capRes.stderr).trim() || "No window handle detected"}`;
+      console.error(`[Smoke] FAIL: ${result.errorMessage}`);
+      return result;
+    }
+
+    // Verify preview screenshot
+    if (!existsSync(outPng)) {
+      result.errorCode = "PREVIEW_CAPTURE_FAILED";
+      result.errorMessage = "Preview screenshot file artifacts/preview.png does not exist.";
+      console.error(`[Smoke] FAIL: ${result.errorMessage}`);
+      return result;
+    }
+
+    const pngBytes = new Uint8Array(readFileSync(outPng));
+    if (pngBytes.length === 0) {
+      result.errorCode = "PREVIEW_CAPTURE_FAILED";
+      result.errorMessage = "Preview screenshot file is empty (0 bytes).";
+      console.error(`[Smoke] FAIL: ${result.errorMessage}`);
+      return result;
+    }
+
+    if (!validatePngHeader(pngBytes)) {
+      result.errorCode = "PREVIEW_CAPTURE_FAILED";
+      result.errorMessage = "Preview screenshot does not contain a valid PNG signature.";
+      console.error(`[Smoke] FAIL: ${result.errorMessage}`);
+      return result;
+    }
+
+    const previewSha = createHash("sha256").update(pngBytes).digest("hex");
+    result.previewCaptured = true;
+    result.previewSha256 = previewSha;
+    result.previewSize = pngBytes.length;
+    result.passed = true;
+
+    console.log(`[Smoke] PASSED: Native window captured (${pngBytes.length} bytes, sha: ${previewSha}). Application remained active.`);
+    return result;
+  } catch (err) {
+    result.aliveStatus = false;
+    result.errorCode = "SMOKE_FAILED";
+    result.errorMessage = `Smoke test execution threw: ${(err as Error)?.message ?? err}`;
+    console.error(`[Smoke] FAIL: ${result.errorMessage}`);
+    return result;
+  } finally {
+    // Graceful and forced process tree termination
+    if (pid) {
+      try {
+        Bun.spawnSync(["taskkill", "/PID", String(pid), "/T", "/F"], {
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "ignore",
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    if (child) {
+      try {
+        (child as unknown as { kill: () => void }).kill();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+if (import.meta.main) {
+  const run = loadRunResult();
+  const wsDir = run.wsDir;
+  const exePath = (run.finalExe as string) || (run.intermediateExe as string);
+
+  const res = await runNativeSmokeTest(exePath, wsDir);
+  saveRunResult({ smokeResult: res });
+
+  if (!res.passed) {
+    saveRunResult({
+      stepFailed: true,
+      errorCode: res.errorCode || "SMOKE_FAILED",
+      errorMessage: res.errorMessage || "Native smoke test failed.",
+    });
+    process.exit(1);
   }
 }

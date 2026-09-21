@@ -13,10 +13,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
       - name: Type check worker scripts
-        run: bunx tsc --noEmit
+        run: bun run typecheck
       - name: Validate worker scripts integrity & syntax
-        run: bun run scripts/ci-validate.ts
+        run: bun run validate
+      - name: Run worker test suite
+        run: bun test
