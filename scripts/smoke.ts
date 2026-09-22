@@ -72,11 +72,37 @@ export async function runNativeSmokeTest(
     child = Bun.spawn([exePath], {
       cwd: join(exePath, ".."),
       stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
     });
     pid = (child as unknown as { pid: number }).pid;
     result.pid = pid;
+
+    let stdoutBuf = "";
+    let stderrBuf = "";
+    const readStream = async (
+      stream: unknown,
+      append: (chunk: string) => void,
+    ) => {
+      if (!stream || typeof (stream as ReadableStream).getReader !== "function") return;
+      try {
+        const reader = (stream as ReadableStream<Uint8Array>).getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          append(decoder.decode(value, { stream: true }));
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    readStream(child.stdout, (chunk) => {
+      stdoutBuf = (stdoutBuf + chunk).slice(-32768);
+    });
+    readStream(child.stderr, (chunk) => {
+      stderrBuf = (stderrBuf + chunk).slice(-32768);
+    });
 
     // Check window discovery and capture preview using capture-window.ps1
     const script = join(import.meta.dir, "capture-window.ps1");
@@ -124,7 +150,8 @@ export async function runNativeSmokeTest(
     if (exitCode !== null) {
       result.aliveStatus = false;
       result.errorCode = "SMOKE_FAILED";
-      result.errorMessage = `Application exited early (exitCode=${exitCode}) during the settle window. Desktop GUI applications must remain active.`;
+      const details = [stderrBuf.trim(), stdoutBuf.trim()].filter(Boolean).join(" | ");
+      result.errorMessage = `Application exited early (exitCode=${exitCode}) during the settle window.${details ? ` Output: ${details}` : ""}`;
       console.error(`[Smoke] FAIL: ${result.errorMessage}`);
       return result;
     }

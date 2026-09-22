@@ -9,8 +9,8 @@
  * - Build QuickGUI native host library (quickgui_host.dll) & verify AMD64 PE
  * - Non-destructively overlay @quickgui/* into app node_modules/@quickgui
  */
-import { cpSync, existsSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { loadRunResult, saveRunResult } from "./r2.ts";
@@ -41,6 +41,83 @@ export class ToolchainSetupError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ToolchainSetupError";
+  }
+}
+
+/**
+ * Locates Microsoft Manifest Tool (mt.exe) from PATH or standard Windows Kits directories.
+ */
+export function findMtExe(): string | null {
+  try {
+    const res = spawnSync("where.exe", ["mt.exe"], { encoding: "utf8" });
+    if (res.status === 0 && res.stdout) {
+      const p = res.stdout.split(/\r?\n/)[0].trim();
+      if (p && existsSync(p)) return p;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const kitsBase = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
+  if (existsSync(kitsBase)) {
+    try {
+      const versions = readdirSync(kitsBase);
+      versions.sort().reverse();
+      for (const ver of versions) {
+        const mtCand = join(kitsBase, ver, "x64", "mt.exe");
+        if (existsSync(mtCand)) return mtCand;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+/**
+ * Embeds Common-Controls v6 manifest into quickgui_host.dll as RT_MANIFEST resource #2.
+ * Required on Windows because rfd imports TaskDialogIndirect from comctl32.dll,
+ * which is only exported by ComCtl32 v6.0+. Without this manifest, Windows resolves
+ * comctl32.dll to legacy v5.82 and fails with Win32 Error 127 (ERROR_PROC_NOT_FOUND).
+ */
+export function embedCommonControlsManifest(dllPath: string): boolean {
+  const mtExe = findMtExe();
+  if (!mtExe) {
+    console.warn("[Toolchain Setup] Warning: mt.exe not found, skipping manifest embedding.");
+    return false;
+  }
+
+  const manifestXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="QuickGUI.Host" type="win32"/>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>
+`;
+  const tmpManifest = join(dirname(dllPath), `.manifest-${Date.now()}.xml`);
+  writeFileSync(tmpManifest, manifestXml, "utf8");
+
+  try {
+    console.log(`[Toolchain Setup] Embedding Common-Controls v6 manifest into ${dllPath}...`);
+    const res = spawnSync(mtExe, ["-manifest", tmpManifest, `-outputresource:${dllPath};#2`], {
+      encoding: "utf8",
+    });
+    if (res.status === 0) {
+      console.log(`[Toolchain Setup] Successfully embedded Common-Controls v6 manifest into ${dllPath}`);
+      return true;
+    } else {
+      console.warn(`[Toolchain Setup] mt.exe exited with status ${res.status}: ${res.stderr || res.stdout}`);
+      return false;
+    }
+  } finally {
+    try {
+      unlinkSync(tmpManifest);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -194,6 +271,12 @@ export function setupPinnedToolchain(options?: SetupToolchainOptions): StagedToo
     throw new ToolchainSetupError(
       `QuickGUI native host library not found at ${hostDllPath} or ${releaseDllPath}`,
     );
+  }
+
+  // Embed Common-Controls v6 manifest into quickgui_host.dll if mt.exe is available
+  embedCommonControlsManifest(finalDllPath);
+  if (existsSync(releaseDllPath) && releaseDllPath !== finalDllPath) {
+    embedCommonControlsManifest(releaseDllPath);
   }
 
   // Verify PE integrity of quickgui_host.dll
