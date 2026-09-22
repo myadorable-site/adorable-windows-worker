@@ -4,7 +4,7 @@
  * - PROVENANCE_MISMATCH on input or metadata discrepancies
  * - SOURCE_HASH_MISMATCH on canonical hash discrepancy
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { readCreds, r2Get, saveRunResult } from "./r2.ts";
 import {
