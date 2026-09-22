@@ -209,6 +209,13 @@ export async function fetchAndVerifySourceBundle(): Promise<{
     count++;
   }
 
+  // Stage RuntimeEvidenceContract if present in metadata
+  if (meta.runtimeEvidenceContract && typeof meta.runtimeEvidenceContract === "object") {
+    const evidenceContractPath = join(wsDir, "runtime-evidence-contract.json");
+    writeFileSync(evidenceContractPath, JSON.stringify(meta.runtimeEvidenceContract, null, 2), "utf8");
+    console.log(`[Fetch] Staged RuntimeEvidenceContract at ${evidenceContractPath}`);
+  }
+
   saveRunResult({
     filesStaged: count,
     sourceVerified: true,
@@ -218,6 +225,7 @@ export async function fetchAndVerifySourceBundle(): Promise<{
     targetPlatform: inputs.targetPlatform,
     targetArch: inputs.targetArch,
     provenanceInputs,
+    runtimeEvidenceContract: meta.runtimeEvidenceContract,
   });
 
   console.log(`[Fetch] Staged ${count} verified source files. Canonical hash: ${computedHash}`);

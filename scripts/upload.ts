@@ -10,7 +10,7 @@
  * FAIL CLOSED:
  * ARTIFACT_UPLOAD_FAILED if any mandatory upload fails.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { loadRunResult, r2Put, readCreds, saveRunResult, sha256Hex } from "./r2.ts";
 
@@ -86,6 +86,48 @@ export async function uploadArtifacts(wsDir: string): Promise<{
     console.log(`[Upload] Uploaded native-acceptance.json: ${accKey}`);
   }
 
+  // 5. Upload Runtime Evidence Bundle (manifest, scenarios, screenshots)
+  const evidenceDir = join(wsDir, "runtime-evidence");
+  const manifestPath = join(evidenceDir, "manifest.json");
+  let runtimeEvidenceManifestKey: string | undefined;
+  let runtimeEvidenceManifestSha256: string | undefined;
+
+  if (existsSync(manifestPath)) {
+    const manifestBytes = new Uint8Array(readFileSync(manifestPath));
+    const manifestSha = await sha256Hex(manifestBytes);
+    const manifestKey = `${prefix}/runtime-evidence/manifest.json`;
+    await r2Put(creds, manifestKey, manifestBytes, "application/json");
+    uploadedKeys.runtimeEvidenceManifest = manifestKey;
+    hashes.runtimeEvidenceManifest = manifestSha;
+    runtimeEvidenceManifestKey = manifestKey;
+    runtimeEvidenceManifestSha256 = manifestSha;
+    console.log(`[Upload] Uploaded runtime-evidence/manifest.json: ${manifestKey} (sha: ${manifestSha})`);
+
+    // Upload scenarios
+    const scenariosDir = join(evidenceDir, "scenarios");
+    if (existsSync(scenariosDir)) {
+      for (const file of readdirSync(scenariosDir)) {
+        if (file.endsWith(".json")) {
+          const scnBytes = new Uint8Array(readFileSync(join(scenariosDir, file)));
+          const scnKey = `${prefix}/runtime-evidence/scenarios/${file}`;
+          await r2Put(creds, scnKey, scnBytes, "application/json");
+        }
+      }
+    }
+
+    // Upload screenshots
+    const screenshotsDir = join(evidenceDir, "screenshots");
+    if (existsSync(screenshotsDir)) {
+      for (const file of readdirSync(screenshotsDir)) {
+        if (file.endsWith(".png")) {
+          const pngBytes = new Uint8Array(readFileSync(join(screenshotsDir, file)));
+          const pngKey = `${prefix}/runtime-evidence/screenshots/${file}`;
+          await r2Put(creds, pngKey, pngBytes, "image/png");
+        }
+      }
+    }
+  }
+
   saveRunResult({
     artifactKey: exeKey,
     artifactSha256: exeSha,
@@ -93,6 +135,8 @@ export async function uploadArtifacts(wsDir: string): Promise<{
     fileName: exeFileName,
     previewKey,
     previewSha256: pngSha,
+    runtimeEvidenceManifestKey,
+    runtimeEvidenceManifestSha256,
     uploadedKeys,
     uploadedHashes: hashes,
   });
