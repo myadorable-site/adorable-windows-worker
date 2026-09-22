@@ -67,6 +67,7 @@ export function packageStandaloneWindows(wsDir: string): {
     const payloadZip = join(wsDir, `.payload-${Date.now()}.zip`);
     const launcherCs = join(wsDir, `.launcher-${Date.now()}.cs`);
     const launcherExe = join(wsDir, `.launcher-${Date.now()}.exe`);
+    let launcherManifest: string | undefined;
 
     try {
       mkdirSync(tempStaging, { recursive: true });
@@ -74,6 +75,19 @@ export function packageStandaloneWindows(wsDir: string): {
       // Stage payload: main binary as app_payload.exe, plus quickgui_host.dll and other assets
       copyFileSync(mainExe, join(tempStaging, "app_payload.exe"));
       copyFileSync(dllPath, join(tempStaging, "quickgui_host.dll"));
+
+      // Write app_payload.exe.manifest to ensure Common-Controls v6 is active for the payload process
+      const comctlManifestXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="${appBaseName}" type="win32"/>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>
+`;
+      writeFileSync(join(tempStaging, "app_payload.exe.manifest"), comctlManifestXml, "utf8");
 
       // Copy any fonts or resources directory if present
       const fontsDir = join(winDir, "fonts");
@@ -217,8 +231,9 @@ namespace AdorableLauncher
                     return proc.ExitCode;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                try { Console.Error.WriteLine("[Launcher Error] " + ex); } catch {}
                 return 1;
             }
         }
@@ -243,6 +258,10 @@ namespace AdorableLauncher
         throw new PackagingError("PACKAGING_FAILED", "csc.exe not found; cannot package standalone launcher.");
       }
 
+      // Write standalone launcher manifest enabling Common-Controls v6
+      launcherManifest = join(wsDir, `.launcher-${Date.now()}.manifest`);
+      writeFileSync(launcherManifest, comctlManifestXml, "utf8");
+
       const cscArgs = [
         cscPath,
         "/target:winexe",
@@ -251,13 +270,9 @@ namespace AdorableLauncher
         "/r:System.IO.Compression.dll",
         "/r:System.IO.Compression.FileSystem.dll",
         `/resource:${payloadZip},payload.zip`,
+        `/win32manifest:${launcherManifest}`,
         `/out:${launcherExe}`,
       ];
-
-      const manifestCandidate = `${mainExe}.manifest`;
-      if (existsSync(manifestCandidate)) {
-        cscArgs.push(`/win32manifest:${manifestCandidate}`);
-      }
 
       const icoCandidate = join(winDir, `${appBaseName}.ico`);
       if (existsSync(icoCandidate)) {
@@ -289,6 +304,7 @@ namespace AdorableLauncher
       try { unlinkSync(payloadZip); } catch { /* ignore */ }
       try { unlinkSync(launcherCs); } catch { /* ignore */ }
       try { unlinkSync(launcherExe); } catch { /* ignore */ }
+      try { if (launcherManifest) unlinkSync(launcherManifest); } catch { /* ignore */ }
     }
   }
 
