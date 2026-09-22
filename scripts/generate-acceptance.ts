@@ -32,10 +32,17 @@ export type NativeAcceptanceStatus =
   | "check-failed"
   | "build-failed"
   | "launch-failed"
+  | "evidence-failed"
   | "accepted";
 
 export interface NativeAcceptanceEvidence {
-  stage: "contract-validation" | "source-security" | "quickgui-check" | "quickgui-build" | "launch-smoke-test";
+  stage:
+    | "contract-validation"
+    | "source-security"
+    | "quickgui-check"
+    | "quickgui-build"
+    | "launch-smoke-test"
+    | "runtime-evidence";
   status: "passed" | "failed" | "skipped";
   timestamp: string;
   contractHash: string;
@@ -51,6 +58,7 @@ export interface NativeAcceptanceGateDecisions {
   quickGuiCheck: "pass" | "fail" | "skipped";
   quickGuiBuild: "pass" | "fail" | "skipped";
   launchSmokeTest: "pass" | "fail" | "skipped";
+  runtimeEvidence?: "pass" | "fail" | "skipped";
 }
 
 export interface NativeAcceptanceReport {
@@ -78,6 +86,19 @@ export interface NativeAcceptanceReport {
     previewSha256?: string;
     acceptanceReportSha256?: string;
     generationResultSha256?: string;
+    evidenceManifestSha256?: string;
+  };
+  runtimeEvidence?: {
+    status: "pass" | "fail" | "uncertain" | "skipped";
+    manifestRef?: string;
+    manifestSha256?: string;
+    subResults: {
+      startup: "pass" | "fail" | "uncertain" | "skipped";
+      navigation: "pass" | "fail" | "uncertain" | "skipped";
+      interaction: "pass" | "fail" | "uncertain" | "skipped";
+      persistence: "pass" | "fail" | "uncertain" | "skipped";
+    };
+    blockers?: string[];
   };
   provenanceDigest: string;
   evaluatedAt: string;
@@ -256,6 +277,50 @@ export function buildAcceptanceReport(wsDir: string): {
     evidenceType: "native-launcher-smoke",
   });
 
+  // Gate 6: Runtime Evidence
+  const evidenceRes = run.runtimeEvidenceResult as {
+    status?: "PASS" | "FAIL" | "UNCERTAIN";
+    manifestPath?: string;
+    manifestSha256?: string;
+    subResults?: {
+      startup: "pass" | "fail" | "uncertain" | "skipped";
+      navigation: "pass" | "fail" | "uncertain" | "skipped";
+      interaction: "pass" | "fail" | "uncertain" | "skipped";
+      persistence: "pass" | "fail" | "uncertain" | "skipped";
+    };
+    evidenceCount?: number;
+    exeSha256?: string;
+  } | undefined;
+
+  let gate6Decision: "pass" | "fail" | "skipped" = "skipped";
+  if (evidenceRes) {
+    if (evidenceRes.status === "PASS") {
+      gate6Decision = "pass";
+    } else {
+      gate6Decision = "fail";
+      blockers.push(`Gate 6 (runtimeEvidence) failed with status "${evidenceRes.status}".`);
+    }
+
+    evidenceList.push({
+      stage: "runtime-evidence",
+      status: gate6Decision === "pass" ? "passed" : "failed",
+      timestamp: now,
+      contractHash,
+      sourceBundleHash,
+      diagnostics: [
+        `Overall status: ${evidenceRes.status}`,
+        `Manifest SHA: ${evidenceRes.manifestSha256 || "none"}`,
+        `Evidence count: ${evidenceRes.evidenceCount || 0}`,
+        `Startup: ${evidenceRes.subResults?.startup || "unknown"}`,
+        `Navigation: ${evidenceRes.subResults?.navigation || "unknown"}`,
+        `Interaction: ${evidenceRes.subResults?.interaction || "unknown"}`,
+        `Persistence: ${evidenceRes.subResults?.persistence || "unknown"}`,
+      ],
+      relevantArtifactPath: evidenceRes.manifestPath,
+      evidenceType: "runtime-evidence-manifest",
+    });
+  }
+
   // Decisions & Final Status
   const gateDecisions: NativeAcceptanceGateDecisions = {
     contractValidation: gate1Pass ? "pass" : "fail",
@@ -263,6 +328,7 @@ export function buildAcceptanceReport(wsDir: string): {
     quickGuiCheck: gate3Decision,
     quickGuiBuild: gate4Decision,
     launchSmokeTest: gate5Decision,
+    runtimeEvidence: gate6Decision,
   };
 
   let status: NativeAcceptanceStatus;
@@ -278,12 +344,15 @@ export function buildAcceptanceReport(wsDir: string): {
     status = "build-failed";
   } else if (gate5Decision === "fail") {
     status = "launch-failed";
+  } else if (gate6Decision === "fail") {
+    status = "evidence-failed";
   } else if (
     gate1Pass &&
     gate2Pass &&
     gate3Decision === "pass" &&
     gate4Decision === "pass" &&
-    gate5Decision === "pass"
+    gate5Decision === "pass" &&
+    (gate6Decision === "pass" || gate6Decision === "skipped")
   ) {
     status = "accepted";
     accepted = true;
@@ -372,7 +441,19 @@ export function buildAcceptanceReport(wsDir: string): {
     artifactHashes: {
       executableSha256: artifactSha256,
       previewSha256: smoke?.previewSha256,
+      evidenceManifestSha256: evidenceRes?.manifestSha256,
     },
+    runtimeEvidence: evidenceRes ? {
+      status: evidenceRes.status === "PASS" ? "pass" : evidenceRes.status === "FAIL" ? "fail" : "uncertain",
+      manifestRef: "runtime-evidence/manifest.json",
+      manifestSha256: evidenceRes.manifestSha256,
+      subResults: evidenceRes.subResults ?? {
+        startup: "skipped",
+        navigation: "skipped",
+        interaction: "skipped",
+        persistence: "skipped",
+      },
+    } : undefined,
     provenanceDigest,
     evaluatedAt: now,
   };

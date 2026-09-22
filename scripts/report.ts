@@ -43,6 +43,15 @@ export interface CallbackPayload {
   preview_key?: string;
   preview_sha256?: string;
   evidence_keys?: Record<string, string>;
+  runtime_evidence_status?: string;
+  runtime_evidence_manifest_key?: string;
+  runtime_evidence_manifest_sha256?: string;
+  runtime_evidence_summary?: {
+    total: number;
+    passed: number;
+    failed: number;
+    uncertain: number;
+  };
   release_status?: string[];
   events?: Array<{ kind: string; payload?: Record<string, unknown> }>;
   error_code?: string;
@@ -96,6 +105,25 @@ export function buildCallbackPayload(): CallbackPayload {
     payload.evidence_keys = run.uploadedKeys as Record<string, string>;
   }
 
+  // Runtime evidence callback fields
+  const evRes = run.runtimeEvidenceResult as {
+    status?: string;
+    manifestPath?: string;
+    manifestSha256?: string;
+  } | undefined;
+
+  if (evRes?.status) {
+    payload.runtime_evidence_status = evRes.status.toLowerCase();
+  }
+  if (typeof run.runtimeEvidenceManifestKey === "string") {
+    payload.runtime_evidence_manifest_key = run.runtimeEvidenceManifestKey;
+  }
+  if (typeof run.runtimeEvidenceManifestSha256 === "string") {
+    payload.runtime_evidence_manifest_sha256 = run.runtimeEvidenceManifestSha256;
+  } else if (evRes?.manifestSha256) {
+    payload.runtime_evidence_manifest_sha256 = evRes.manifestSha256;
+  }
+
   if (!isAccepted) {
     // Determine the precise granular error code
     const explicitErrorCode = (run.errorCode as string);
@@ -117,6 +145,9 @@ export function buildCallbackPayload(): CallbackPayload {
     } else if (report?.status === "launch-failed") {
       payload.error_code = "SMOKE_FAILED";
       payload.error_message = report.blockers.join("; ") || "Launch smoke test failed.";
+    } else if (report?.status === "evidence-failed") {
+      payload.error_code = "EVIDENCE_EXECUTION_FAILED";
+      payload.error_message = report.blockers.join("; ") || "Runtime evidence execution failed.";
     } else {
       payload.error_code = "REMOTE_BUILD_FAILED";
       payload.error_message = "The remote Windows build did not complete successfully.";

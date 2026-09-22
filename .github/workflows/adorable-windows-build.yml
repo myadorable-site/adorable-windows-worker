@@ -129,6 +129,9 @@ jobs:
       - name: Native launch smoke test & preview capture
         run: bun ./scripts/smoke.ts
 
+      - name: Deterministic Windows runtime evidence execution
+        run: bun ./scripts/evidence.ts
+
       - name: Assemble structured acceptance report & hash artifacts
         run: bun ./scripts/generate-acceptance.ts
 
