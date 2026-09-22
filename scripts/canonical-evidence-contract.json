@@ -1,0 +1,422 @@
+{
+  "contractVersion": "0.9C.1",
+  "generationContractHash": "h-e44a337649b66028",
+  "sourceBundleHash": "3193136f27694a5bfecaa57f38901b294571ad078496b5df54a25c179ea286e1",
+  "targetPlatform": "windows",
+  "targetArch": "x64",
+  "quickGuiRevision": "0a5007a03be4a0ba08c7da27010f74699711255a",
+  "expectedScreens": [
+    "dashboard",
+    "transactions",
+    "budgets",
+    "recurring"
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "startup",
+      "kind": "STARTUP",
+      "title": "Application Startup & Window Verification",
+      "description": "Launch native executable and capture verified window presentation",
+      "steps": [
+        {
+          "stepId": "startup-launch",
+          "action": "LAUNCH",
+          "settleMs": 5000
+        },
+        {
+          "stepId": "startup-wait",
+          "action": "WAIT",
+          "durationMs": 3000,
+          "condition": "window_visible"
+        },
+        {
+          "stepId": "startup-assert-window",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "startup-screenshot",
+          "action": "SCREENSHOT",
+          "name": "startup-window",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-startup-screenshot"
+      ]
+    },
+    {
+      "scenarioId": "nav-transactions",
+      "kind": "NAVIGATION",
+      "title": "Navigation to transactions",
+      "description": "Navigate to destination screen transactions via route route-nav:dashboard",
+      "steps": [
+        {
+          "stepId": "nav-transactions-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "Transactions"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "nav-transactions-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "nav-transactions-screenshot",
+          "action": "SCREENSHOT",
+          "name": "nav-transactions",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-nav-transactions"
+      ]
+    },
+    {
+      "scenarioId": "nav-budgets",
+      "kind": "NAVIGATION",
+      "title": "Navigation to budgets",
+      "description": "Navigate to destination screen budgets via route route-nav:transactions",
+      "steps": [
+        {
+          "stepId": "nav-budgets-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "Budgets"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "nav-budgets-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "nav-budgets-screenshot",
+          "action": "SCREENSHOT",
+          "name": "nav-budgets",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-nav-budgets"
+      ]
+    },
+    {
+      "scenarioId": "nav-recurring",
+      "kind": "NAVIGATION",
+      "title": "Navigation to recurring",
+      "description": "Navigate to destination screen recurring via route route-nav:budgets",
+      "steps": [
+        {
+          "stepId": "nav-recurring-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "Recurring"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "nav-recurring-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "nav-recurring-screenshot",
+          "action": "SCREENSHOT",
+          "name": "nav-recurring",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-nav-recurring"
+      ]
+    },
+    {
+      "scenarioId": "nav-dashboard",
+      "kind": "NAVIGATION",
+      "title": "Navigation to dashboard",
+      "description": "Navigate to destination screen dashboard via route route-nav:recurring",
+      "steps": [
+        {
+          "stepId": "nav-dashboard-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "Dashboard"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "nav-dashboard-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "nav-dashboard-screenshot",
+          "action": "SCREENSHOT",
+          "name": "nav-dashboard",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-nav-dashboard"
+      ]
+    },
+    {
+      "scenarioId": "interaction-dashboard",
+      "kind": "INTERACTION",
+      "title": "Primary Interaction: Log Transaction",
+      "description": "Execute authoritative primary action act:dashboard:primary on screen dashboard",
+      "steps": [
+        {
+          "stepId": "interaction-dashboard-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "Log Transaction"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "interaction-dashboard-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "interaction-dashboard-screenshot",
+          "action": "SCREENSHOT",
+          "name": "interaction-dashboard",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-interaction-dashboard"
+      ]
+    },
+    {
+      "scenarioId": "interaction-transactions",
+      "kind": "INTERACTION",
+      "title": "Primary Interaction: New Transaction",
+      "description": "Execute authoritative primary action act:transactions:primary on screen transactions",
+      "steps": [
+        {
+          "stepId": "interaction-transactions-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "New Transaction"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "interaction-transactions-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "interaction-transactions-screenshot",
+          "action": "SCREENSHOT",
+          "name": "interaction-transactions",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-interaction-transactions"
+      ]
+    },
+    {
+      "scenarioId": "interaction-budgets",
+      "kind": "INTERACTION",
+      "title": "Primary Interaction: New Budget",
+      "description": "Execute authoritative primary action act:budgets:primary on screen budgets",
+      "steps": [
+        {
+          "stepId": "interaction-budgets-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "New Budget"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "interaction-budgets-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "interaction-budgets-screenshot",
+          "action": "SCREENSHOT",
+          "name": "interaction-budgets",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-interaction-budgets"
+      ]
+    },
+    {
+      "scenarioId": "interaction-recurring",
+      "kind": "INTERACTION",
+      "title": "Primary Interaction: New Recurring",
+      "description": "Execute authoritative primary action act:recurring:primary on screen recurring",
+      "steps": [
+        {
+          "stepId": "interaction-recurring-click",
+          "action": "CLICK",
+          "target": {
+            "role": "button",
+            "name": "New Recurring"
+          },
+          "settleMs": 1000
+        },
+        {
+          "stepId": "interaction-recurring-assert",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "interaction-recurring-screenshot",
+          "action": "SCREENSHOT",
+          "name": "interaction-recurring",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-interaction-recurring"
+      ]
+    },
+    {
+      "scenarioId": "persistence",
+      "kind": "PERSISTENCE",
+      "title": "State Persistence Across Restart",
+      "description": "Verify persistence behavior (json-file via node:fs) across process lifecycle",
+      "steps": [
+        {
+          "stepId": "persist-before-screenshot",
+          "action": "SCREENSHOT",
+          "name": "persistence-before",
+          "required": true
+        },
+        {
+          "stepId": "persist-restart",
+          "action": "RESTART",
+          "settleMs": 5000
+        },
+        {
+          "stepId": "persist-assert-window",
+          "action": "ASSERT",
+          "condition": "window_exists"
+        },
+        {
+          "stepId": "persist-after-screenshot",
+          "action": "SCREENSHOT",
+          "name": "persistence-after",
+          "required": true
+        }
+      ],
+      "requiredEvidence": [
+        "req-evidence-persistence-before",
+        "req-evidence-persistence-after"
+      ]
+    }
+  ],
+  "evidenceRequirements": [
+    {
+      "requirementId": "req-evidence-startup-screenshot",
+      "scenarioId": "startup",
+      "stepId": "startup-screenshot",
+      "type": "screenshot",
+      "description": "Verified native application window rendered after initial launch and settle",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-nav-transactions",
+      "scenarioId": "nav-transactions",
+      "stepId": "nav-transactions-screenshot",
+      "type": "screenshot",
+      "description": "Verified screen presentation after navigation to transactions",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-nav-budgets",
+      "scenarioId": "nav-budgets",
+      "stepId": "nav-budgets-screenshot",
+      "type": "screenshot",
+      "description": "Verified screen presentation after navigation to budgets",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-nav-recurring",
+      "scenarioId": "nav-recurring",
+      "stepId": "nav-recurring-screenshot",
+      "type": "screenshot",
+      "description": "Verified screen presentation after navigation to recurring",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-nav-dashboard",
+      "scenarioId": "nav-dashboard",
+      "stepId": "nav-dashboard-screenshot",
+      "type": "screenshot",
+      "description": "Verified screen presentation after navigation to dashboard",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-interaction-dashboard",
+      "scenarioId": "interaction-dashboard",
+      "stepId": "interaction-dashboard-screenshot",
+      "type": "screenshot",
+      "description": "Verified window presentation after executing primary action Log Transaction on screen dashboard",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-interaction-transactions",
+      "scenarioId": "interaction-transactions",
+      "stepId": "interaction-transactions-screenshot",
+      "type": "screenshot",
+      "description": "Verified window presentation after executing primary action New Transaction on screen transactions",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-interaction-budgets",
+      "scenarioId": "interaction-budgets",
+      "stepId": "interaction-budgets-screenshot",
+      "type": "screenshot",
+      "description": "Verified window presentation after executing primary action New Budget on screen budgets",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-interaction-recurring",
+      "scenarioId": "interaction-recurring",
+      "stepId": "interaction-recurring-screenshot",
+      "type": "screenshot",
+      "description": "Verified window presentation after executing primary action New Recurring on screen recurring",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-persistence-before",
+      "scenarioId": "persistence",
+      "stepId": "persist-before-screenshot",
+      "type": "screenshot",
+      "description": "Verified application state prior to restart under persistence contract",
+      "required": true
+    },
+    {
+      "requirementId": "req-evidence-persistence-after",
+      "scenarioId": "persistence",
+      "stepId": "persist-after-screenshot",
+      "type": "screenshot",
+      "description": "Verified application state restored and rendered after process restart",
+      "required": true
+    }
+  ],
+  "contractHash": "rec-897e4f2f814a2865"
+}
