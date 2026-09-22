@@ -266,6 +266,18 @@ export async function runRuntimeEvidence(): Promise<{
         const stepT0 = performance.now();
         console.log(`[Evidence][${scenario.scenarioId}] Step: ${step.stepId} (${step.action})`);
 
+        // Ensure process is running for interactive or capture steps
+        if (!activePid && step.action !== "WAIT" && step.action !== "LAUNCH") {
+          activeChild = Bun.spawn([exePath], {
+            cwd: dirname(exePath),
+            stdin: "ignore",
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+          activePid = (activeChild as unknown as { pid: number }).pid;
+          await new Promise((r) => setTimeout(r, 4000));
+        }
+
         if (step.action === "LAUNCH") {
           activeChild = Bun.spawn([exePath], {
             cwd: dirname(exePath),
