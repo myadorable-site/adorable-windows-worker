@@ -52,6 +52,20 @@ export interface CallbackPayload {
     failed: number;
     uncertain: number;
   };
+  visual_acceptance_status?: string;
+  visual_acceptance_contract_hash?: string;
+  visual_acceptance_manifest_key?: string;
+  visual_acceptance_manifest_sha256?: string;
+  visual_acceptance_report_sha256?: string;
+  visual_acceptance_summary?: {
+    total: number;
+    passed: number;
+    failed: number;
+    uncertain: number;
+  };
+  visual_acceptance_obligations_total?: number;
+  visual_acceptance_obligations_passed?: number;
+  visual_acceptance_obligations_failed?: number;
   release_status?: string[];
   events?: Array<{ kind: string; payload?: Record<string, unknown> }>;
   error_code?: string;
@@ -124,6 +138,51 @@ export function buildCallbackPayload(): CallbackPayload {
     payload.runtime_evidence_manifest_sha256 = evRes.manifestSha256;
   }
 
+  // Visual acceptance callback fields
+  const visualRes = run.visualAcceptanceResult as {
+    status?: string;
+    reportPath?: string;
+    reportSha256?: string;
+    summary?: {
+      total?: number;
+      totalObligations?: number;
+      passed: number;
+      failed: number;
+      uncertain: number;
+    };
+    contractHash?: string;
+  } | undefined;
+
+  if (visualRes?.status) {
+    payload.visual_acceptance_status = visualRes.status.toLowerCase();
+  }
+  if (visualRes?.contractHash) {
+    payload.visual_acceptance_contract_hash = visualRes.contractHash;
+  }
+  if (typeof run.visualAcceptanceManifestKey === "string") {
+    payload.visual_acceptance_manifest_key = run.visualAcceptanceManifestKey;
+  }
+  if (typeof run.visualAcceptanceManifestSha256 === "string") {
+    payload.visual_acceptance_manifest_sha256 = run.visualAcceptanceManifestSha256;
+  } else if (visualRes?.reportSha256) {
+    payload.visual_acceptance_manifest_sha256 = visualRes.reportSha256;
+  }
+  if (visualRes?.reportSha256) {
+    payload.visual_acceptance_report_sha256 = visualRes.reportSha256;
+  }
+  if (visualRes?.summary) {
+    const total = visualRes.summary.total ?? visualRes.summary.totalObligations ?? (visualRes.summary.passed + visualRes.summary.failed + visualRes.summary.uncertain);
+    payload.visual_acceptance_summary = {
+      total,
+      passed: visualRes.summary.passed,
+      failed: visualRes.summary.failed,
+      uncertain: visualRes.summary.uncertain,
+    };
+    payload.visual_acceptance_obligations_total = total;
+    payload.visual_acceptance_obligations_passed = visualRes.summary.passed;
+    payload.visual_acceptance_obligations_failed = visualRes.summary.failed;
+  }
+
   if (!isAccepted) {
     // Determine the precise granular error code
     const explicitErrorCode = (run.errorCode as string);
@@ -148,6 +207,9 @@ export function buildCallbackPayload(): CallbackPayload {
     } else if (report?.status === "evidence-failed") {
       payload.error_code = "EVIDENCE_EXECUTION_FAILED";
       payload.error_message = report.blockers.join("; ") || "Runtime evidence execution failed.";
+    } else if (report?.status === "visual-failed") {
+      payload.error_code = "VISUAL_OBLIGATION_FAILED";
+      payload.error_message = report.blockers.join("; ") || "Visual acceptance failed.";
     } else {
       payload.error_code = "REMOTE_BUILD_FAILED";
       payload.error_message = "The remote Windows build did not complete successfully.";

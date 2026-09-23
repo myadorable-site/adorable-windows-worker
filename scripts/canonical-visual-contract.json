@@ -1,0 +1,715 @@
+{
+  "contractVersion": "0.9C.2",
+  "designSpecHash": "h-a3d5cbdd6dc89e21",
+  "generationContractHash": "h-e44a337649b66028",
+  "sourceBundleHash": "3193136f27694a5bfecaa57f38901b294571ad078496b5df54a25c179ea286e1",
+  "runtimeEvidenceContractHash": "rec-897e4f2f814a2865",
+  "targetPlatform": "windows",
+  "targetArch": "x64",
+  "quickGuiRevision": "0a5007a03be4a0ba08c7da27010f74699711255",
+  "screens": [
+    {
+      "screenId": "dashboard",
+      "purpose": "High-level financial overview, key account balances, spending trends, and recent transactions",
+      "layoutType": "master-detail",
+      "density": "compact",
+      "expectedRegions": [
+        "sidebar",
+        "main",
+        "content"
+      ],
+      "requiredActionIds": [
+        "act:dashboard:primary",
+        "act:dashboard:search",
+        "act:dashboard:refresh"
+      ],
+      "requiredContent": [
+        "High-level financial overview, key account balances, spending trends, and recent transactions"
+      ],
+      "evidenceScenarioId": "startup",
+      "evidenceStepId": "startup-screenshot"
+    },
+    {
+      "screenId": "transactions",
+      "purpose": "Searchable, filterable ledger of all financial entries with category breakdown",
+      "layoutType": "master-detail",
+      "density": "compact",
+      "expectedRegions": [
+        "sidebar",
+        "main",
+        "content"
+      ],
+      "requiredActionIds": [
+        "act:transactions:primary",
+        "act:transactions:search",
+        "act:transactions:refresh"
+      ],
+      "requiredContent": [
+        "Searchable, filterable ledger of all financial entries with category breakdown"
+      ],
+      "evidenceScenarioId": "nav-transactions",
+      "evidenceStepId": "nav-transactions-screenshot"
+    },
+    {
+      "screenId": "budgets",
+      "purpose": "Monthly category budget tracking with progress indicators and over-budget warnings",
+      "layoutType": "master-detail",
+      "density": "compact",
+      "expectedRegions": [
+        "sidebar",
+        "main",
+        "content"
+      ],
+      "requiredActionIds": [
+        "act:budgets:primary",
+        "act:budgets:search",
+        "act:budgets:refresh"
+      ],
+      "requiredContent": [
+        "Monthly category budget tracking with progress indicators and over-budget warnings"
+      ],
+      "evidenceScenarioId": "nav-budgets",
+      "evidenceStepId": "nav-budgets-screenshot"
+    },
+    {
+      "screenId": "recurring",
+      "purpose": "Recurring bills, subscriptions, and scheduled cash flow tracker",
+      "layoutType": "master-detail",
+      "density": "compact",
+      "expectedRegions": [
+        "sidebar",
+        "main",
+        "content"
+      ],
+      "requiredActionIds": [
+        "act:recurring:primary",
+        "act:recurring:search",
+        "act:recurring:refresh"
+      ],
+      "requiredContent": [
+        "Recurring bills, subscriptions, and scheduled cash flow tracker"
+      ],
+      "evidenceScenarioId": "nav-recurring",
+      "evidenceStepId": "nav-recurring-screenshot"
+    }
+  ],
+  "obligations": [
+    {
+      "obligationId": "vo-dashboard-screen-present",
+      "screenId": "dashboard",
+      "type": "SCREEN_PRESENT",
+      "required": true,
+      "description": "Authoritative runtime evidence must contain a screenshot for screen \"dashboard\".",
+      "expected": {
+        "screenId": "dashboard",
+        "scenarioId": "startup",
+        "stepId": "startup-screenshot"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-integrity",
+      "screenId": "dashboard",
+      "type": "SCREENSHOT_INTEGRITY",
+      "required": true,
+      "description": "Screenshot for screen \"dashboard\" must be a valid, non-corrupt PNG matching recorded SHA-256.",
+      "expected": {
+        "screenId": "dashboard"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-window-bounds",
+      "screenId": "dashboard",
+      "type": "WINDOW_BOUNDS",
+      "required": true,
+      "description": "Window bounds for screen \"dashboard\" must satisfy desktop minimum dimensions (960x620).",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620,
+        "maxWidth": 3840,
+        "maxHeight": 2160
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-theme",
+      "screenId": "dashboard",
+      "type": "EXPECTED_THEME",
+      "required": true,
+      "description": "Visual presentation for screen \"dashboard\" must conform to the authoritative \"dark\" theme.",
+      "expected": {
+        "theme": "dark"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-layout",
+      "screenId": "dashboard",
+      "type": "EXPECTED_LAYOUT",
+      "required": true,
+      "description": "Screen layout must adhere to master-detail with compact density.",
+      "expected": {
+        "layoutType": "master-detail",
+        "density": "compact"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-no-clipping",
+      "screenId": "dashboard",
+      "type": "NO_CLIPPING",
+      "required": true,
+      "description": "Content on screen \"dashboard\" must not suffer from obvious clipping or truncated window view.",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-no-overflow",
+      "screenId": "dashboard",
+      "type": "NO_OVERFLOW",
+      "required": true,
+      "description": "Window aspect ratio must indicate normal desktop presentation without overflow distortion.",
+      "expected": {
+        "minAspectRatio": 1,
+        "maxAspectRatio": 2.8
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-region-sidebar",
+      "screenId": "dashboard",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"sidebar\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "sidebar",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-region-main",
+      "screenId": "dashboard",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"main\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "main",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-region-content",
+      "screenId": "dashboard",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"content\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "content",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-primary-action",
+      "screenId": "dashboard",
+      "type": "REQUIRED_ACTION",
+      "required": true,
+      "description": "Primary action \"Log Transaction\" must be rendered and accessible.",
+      "expected": {
+        "actionId": "act:dashboard:primary",
+        "label": "Log Transaction",
+        "kind": "primary"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-navigation",
+      "screenId": "dashboard",
+      "type": "NAVIGATION_ELEMENT",
+      "required": true,
+      "description": "Navigation affordance for destination \"dashboard\" must be present.",
+      "expected": {
+        "destinationScreenId": "dashboard",
+        "label": "dashboard"
+      }
+    },
+    {
+      "obligationId": "vo-dashboard-required-text",
+      "screenId": "dashboard",
+      "type": "REQUIRED_TEXT",
+      "required": false,
+      "description": "Screen purpose text for \"dashboard\" is expected on view.",
+      "expected": {
+        "text": "dashboard"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-screen-present",
+      "screenId": "transactions",
+      "type": "SCREEN_PRESENT",
+      "required": true,
+      "description": "Authoritative runtime evidence must contain a screenshot for screen \"transactions\".",
+      "expected": {
+        "screenId": "transactions",
+        "scenarioId": "nav-transactions",
+        "stepId": "nav-transactions-screenshot"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-integrity",
+      "screenId": "transactions",
+      "type": "SCREENSHOT_INTEGRITY",
+      "required": true,
+      "description": "Screenshot for screen \"transactions\" must be a valid, non-corrupt PNG matching recorded SHA-256.",
+      "expected": {
+        "screenId": "transactions"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-window-bounds",
+      "screenId": "transactions",
+      "type": "WINDOW_BOUNDS",
+      "required": true,
+      "description": "Window bounds for screen \"transactions\" must satisfy desktop minimum dimensions (960x620).",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620,
+        "maxWidth": 3840,
+        "maxHeight": 2160
+      }
+    },
+    {
+      "obligationId": "vo-transactions-theme",
+      "screenId": "transactions",
+      "type": "EXPECTED_THEME",
+      "required": true,
+      "description": "Visual presentation for screen \"transactions\" must conform to the authoritative \"dark\" theme.",
+      "expected": {
+        "theme": "dark"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-layout",
+      "screenId": "transactions",
+      "type": "EXPECTED_LAYOUT",
+      "required": true,
+      "description": "Screen layout must adhere to master-detail with compact density.",
+      "expected": {
+        "layoutType": "master-detail",
+        "density": "compact"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-no-clipping",
+      "screenId": "transactions",
+      "type": "NO_CLIPPING",
+      "required": true,
+      "description": "Content on screen \"transactions\" must not suffer from obvious clipping or truncated window view.",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620
+      }
+    },
+    {
+      "obligationId": "vo-transactions-no-overflow",
+      "screenId": "transactions",
+      "type": "NO_OVERFLOW",
+      "required": true,
+      "description": "Window aspect ratio must indicate normal desktop presentation without overflow distortion.",
+      "expected": {
+        "minAspectRatio": 1,
+        "maxAspectRatio": 2.8
+      }
+    },
+    {
+      "obligationId": "vo-transactions-region-sidebar",
+      "screenId": "transactions",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"sidebar\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "sidebar",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-region-main",
+      "screenId": "transactions",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"main\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "main",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-region-content",
+      "screenId": "transactions",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"content\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "content",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-primary-action",
+      "screenId": "transactions",
+      "type": "REQUIRED_ACTION",
+      "required": true,
+      "description": "Primary action \"New Transaction\" must be rendered and accessible.",
+      "expected": {
+        "actionId": "act:transactions:primary",
+        "label": "New Transaction",
+        "kind": "primary"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-navigation",
+      "screenId": "transactions",
+      "type": "NAVIGATION_ELEMENT",
+      "required": true,
+      "description": "Navigation affordance for destination \"transactions\" must be present.",
+      "expected": {
+        "destinationScreenId": "transactions",
+        "label": "transactions"
+      }
+    },
+    {
+      "obligationId": "vo-transactions-required-text",
+      "screenId": "transactions",
+      "type": "REQUIRED_TEXT",
+      "required": false,
+      "description": "Screen purpose text for \"transactions\" is expected on view.",
+      "expected": {
+        "text": "transactions"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-screen-present",
+      "screenId": "budgets",
+      "type": "SCREEN_PRESENT",
+      "required": true,
+      "description": "Authoritative runtime evidence must contain a screenshot for screen \"budgets\".",
+      "expected": {
+        "screenId": "budgets",
+        "scenarioId": "nav-budgets",
+        "stepId": "nav-budgets-screenshot"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-integrity",
+      "screenId": "budgets",
+      "type": "SCREENSHOT_INTEGRITY",
+      "required": true,
+      "description": "Screenshot for screen \"budgets\" must be a valid, non-corrupt PNG matching recorded SHA-256.",
+      "expected": {
+        "screenId": "budgets"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-window-bounds",
+      "screenId": "budgets",
+      "type": "WINDOW_BOUNDS",
+      "required": true,
+      "description": "Window bounds for screen \"budgets\" must satisfy desktop minimum dimensions (960x620).",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620,
+        "maxWidth": 3840,
+        "maxHeight": 2160
+      }
+    },
+    {
+      "obligationId": "vo-budgets-theme",
+      "screenId": "budgets",
+      "type": "EXPECTED_THEME",
+      "required": true,
+      "description": "Visual presentation for screen \"budgets\" must conform to the authoritative \"dark\" theme.",
+      "expected": {
+        "theme": "dark"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-layout",
+      "screenId": "budgets",
+      "type": "EXPECTED_LAYOUT",
+      "required": true,
+      "description": "Screen layout must adhere to master-detail with compact density.",
+      "expected": {
+        "layoutType": "master-detail",
+        "density": "compact"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-no-clipping",
+      "screenId": "budgets",
+      "type": "NO_CLIPPING",
+      "required": true,
+      "description": "Content on screen \"budgets\" must not suffer from obvious clipping or truncated window view.",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620
+      }
+    },
+    {
+      "obligationId": "vo-budgets-no-overflow",
+      "screenId": "budgets",
+      "type": "NO_OVERFLOW",
+      "required": true,
+      "description": "Window aspect ratio must indicate normal desktop presentation without overflow distortion.",
+      "expected": {
+        "minAspectRatio": 1,
+        "maxAspectRatio": 2.8
+      }
+    },
+    {
+      "obligationId": "vo-budgets-region-sidebar",
+      "screenId": "budgets",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"sidebar\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "sidebar",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-region-main",
+      "screenId": "budgets",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"main\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "main",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-region-content",
+      "screenId": "budgets",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"content\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "content",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-primary-action",
+      "screenId": "budgets",
+      "type": "REQUIRED_ACTION",
+      "required": true,
+      "description": "Primary action \"New Budget\" must be rendered and accessible.",
+      "expected": {
+        "actionId": "act:budgets:primary",
+        "label": "New Budget",
+        "kind": "primary"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-navigation",
+      "screenId": "budgets",
+      "type": "NAVIGATION_ELEMENT",
+      "required": true,
+      "description": "Navigation affordance for destination \"budgets\" must be present.",
+      "expected": {
+        "destinationScreenId": "budgets",
+        "label": "budgets"
+      }
+    },
+    {
+      "obligationId": "vo-budgets-required-text",
+      "screenId": "budgets",
+      "type": "REQUIRED_TEXT",
+      "required": false,
+      "description": "Screen purpose text for \"budgets\" is expected on view.",
+      "expected": {
+        "text": "budgets"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-screen-present",
+      "screenId": "recurring",
+      "type": "SCREEN_PRESENT",
+      "required": true,
+      "description": "Authoritative runtime evidence must contain a screenshot for screen \"recurring\".",
+      "expected": {
+        "screenId": "recurring",
+        "scenarioId": "nav-recurring",
+        "stepId": "nav-recurring-screenshot"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-integrity",
+      "screenId": "recurring",
+      "type": "SCREENSHOT_INTEGRITY",
+      "required": true,
+      "description": "Screenshot for screen \"recurring\" must be a valid, non-corrupt PNG matching recorded SHA-256.",
+      "expected": {
+        "screenId": "recurring"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-window-bounds",
+      "screenId": "recurring",
+      "type": "WINDOW_BOUNDS",
+      "required": true,
+      "description": "Window bounds for screen \"recurring\" must satisfy desktop minimum dimensions (960x620).",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620,
+        "maxWidth": 3840,
+        "maxHeight": 2160
+      }
+    },
+    {
+      "obligationId": "vo-recurring-theme",
+      "screenId": "recurring",
+      "type": "EXPECTED_THEME",
+      "required": true,
+      "description": "Visual presentation for screen \"recurring\" must conform to the authoritative \"dark\" theme.",
+      "expected": {
+        "theme": "dark"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-layout",
+      "screenId": "recurring",
+      "type": "EXPECTED_LAYOUT",
+      "required": true,
+      "description": "Screen layout must adhere to master-detail with compact density.",
+      "expected": {
+        "layoutType": "master-detail",
+        "density": "compact"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-no-clipping",
+      "screenId": "recurring",
+      "type": "NO_CLIPPING",
+      "required": true,
+      "description": "Content on screen \"recurring\" must not suffer from obvious clipping or truncated window view.",
+      "expected": {
+        "minWidth": 960,
+        "minHeight": 620
+      }
+    },
+    {
+      "obligationId": "vo-recurring-no-overflow",
+      "screenId": "recurring",
+      "type": "NO_OVERFLOW",
+      "required": true,
+      "description": "Window aspect ratio must indicate normal desktop presentation without overflow distortion.",
+      "expected": {
+        "minAspectRatio": 1,
+        "maxAspectRatio": 2.8
+      }
+    },
+    {
+      "obligationId": "vo-recurring-region-sidebar",
+      "screenId": "recurring",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"sidebar\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "sidebar",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-region-main",
+      "screenId": "recurring",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"main\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "main",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-region-content",
+      "screenId": "recurring",
+      "type": "REGION_PRESENT",
+      "required": true,
+      "description": "Structural region \"content\" must be accommodated within layout.",
+      "expected": {
+        "regionName": "content",
+        "layoutType": "master-detail"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-primary-action",
+      "screenId": "recurring",
+      "type": "REQUIRED_ACTION",
+      "required": true,
+      "description": "Primary action \"New Recurring\" must be rendered and accessible.",
+      "expected": {
+        "actionId": "act:recurring:primary",
+        "label": "New Recurring",
+        "kind": "primary"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-navigation",
+      "screenId": "recurring",
+      "type": "NAVIGATION_ELEMENT",
+      "required": true,
+      "description": "Navigation affordance for destination \"recurring\" must be present.",
+      "expected": {
+        "destinationScreenId": "recurring",
+        "label": "recurring"
+      }
+    },
+    {
+      "obligationId": "vo-recurring-required-text",
+      "screenId": "recurring",
+      "type": "REQUIRED_TEXT",
+      "required": false,
+      "description": "Screen purpose text for \"recurring\" is expected on view.",
+      "expected": {
+        "text": "recurring"
+      }
+    }
+  ],
+  "requiredEvidence": [
+    {
+      "requirementId": "ve-req-dashboard",
+      "screenId": "dashboard",
+      "scenarioId": "startup",
+      "stepId": "startup-screenshot",
+      "type": "screenshot",
+      "description": "Authoritative visual screenshot for dashboard",
+      "required": true
+    },
+    {
+      "requirementId": "ve-req-transactions",
+      "screenId": "transactions",
+      "scenarioId": "nav-transactions",
+      "stepId": "nav-transactions-screenshot",
+      "type": "screenshot",
+      "description": "Authoritative visual screenshot for transactions",
+      "required": true
+    },
+    {
+      "requirementId": "ve-req-budgets",
+      "screenId": "budgets",
+      "scenarioId": "nav-budgets",
+      "stepId": "nav-budgets-screenshot",
+      "type": "screenshot",
+      "description": "Authoritative visual screenshot for budgets",
+      "required": true
+    },
+    {
+      "requirementId": "ve-req-recurring",
+      "screenId": "recurring",
+      "scenarioId": "nav-recurring",
+      "stepId": "nav-recurring-screenshot",
+      "type": "screenshot",
+      "description": "Authoritative visual screenshot for recurring",
+      "required": true
+    }
+  ],
+  "contractId": "vac-b917446605c0b66d",
+  "contractHash": "vac-b917446605c0b66d",
+  "createdAt": "2026-09-23T11:37:10.503Z"
+}

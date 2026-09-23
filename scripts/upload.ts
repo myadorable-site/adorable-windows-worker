@@ -128,6 +128,23 @@ export async function uploadArtifacts(wsDir: string): Promise<{
     }
   }
 
+  // 6. Upload Visual Acceptance Report
+  const visualReportPath = join(wsDir, "artifacts", "visual-acceptance.json");
+  let visualAcceptanceManifestKey: string | undefined;
+  let visualAcceptanceManifestSha256: string | undefined;
+
+  if (existsSync(visualReportPath)) {
+    const reportBytes = new Uint8Array(readFileSync(visualReportPath));
+    const reportSha = await sha256Hex(reportBytes);
+    const reportKey = `${prefix}/visual-acceptance/report.json`;
+    await r2Put(creds, reportKey, reportBytes, "application/json");
+    uploadedKeys.visualAcceptanceReport = reportKey;
+    hashes.visualAcceptanceReport = reportSha;
+    visualAcceptanceManifestKey = reportKey;
+    visualAcceptanceManifestSha256 = reportSha;
+    console.log(`[Upload] Uploaded visual-acceptance/report.json: ${reportKey} (sha: ${reportSha})`);
+  }
+
   saveRunResult({
     artifactKey: exeKey,
     artifactSha256: exeSha,
@@ -137,6 +154,8 @@ export async function uploadArtifacts(wsDir: string): Promise<{
     previewSha256: pngSha,
     runtimeEvidenceManifestKey,
     runtimeEvidenceManifestSha256,
+    visualAcceptanceManifestKey,
+    visualAcceptanceManifestSha256,
     uploadedKeys,
     uploadedHashes: hashes,
   });
