@@ -33,6 +33,7 @@ export type NativeAcceptanceStatus =
   | "build-failed"
   | "launch-failed"
   | "evidence-failed"
+  | "visual-failed"
   | "accepted";
 
 export interface NativeAcceptanceEvidence {
@@ -42,7 +43,8 @@ export interface NativeAcceptanceEvidence {
     | "quickgui-check"
     | "quickgui-build"
     | "launch-smoke-test"
-    | "runtime-evidence";
+    | "runtime-evidence"
+    | "visual-acceptance";
   status: "passed" | "failed" | "skipped";
   timestamp: string;
   contractHash: string;
@@ -59,6 +61,7 @@ export interface NativeAcceptanceGateDecisions {
   quickGuiBuild: "pass" | "fail" | "skipped";
   launchSmokeTest: "pass" | "fail" | "skipped";
   runtimeEvidence?: "pass" | "fail" | "skipped";
+  visualAcceptance?: "pass" | "fail" | "skipped";
 }
 
 export interface NativeAcceptanceReport {
@@ -87,6 +90,7 @@ export interface NativeAcceptanceReport {
     acceptanceReportSha256?: string;
     generationResultSha256?: string;
     evidenceManifestSha256?: string;
+    visualAcceptanceReportSha256?: string;
   };
   runtimeEvidence?: {
     status: "pass" | "fail" | "uncertain" | "skipped";
@@ -97,6 +101,19 @@ export interface NativeAcceptanceReport {
       navigation: "pass" | "fail" | "uncertain" | "skipped";
       interaction: "pass" | "fail" | "uncertain" | "skipped";
       persistence: "pass" | "fail" | "uncertain" | "skipped";
+    };
+    blockers?: string[];
+  };
+  visualAcceptance?: {
+    status: "pass" | "fail" | "uncertain" | "skipped";
+    contractHash?: string;
+    reportRef?: string;
+    reportSha256?: string;
+    summary?: {
+      total: number;
+      passed: number;
+      failed: number;
+      uncertain: number;
     };
     blockers?: string[];
   };
@@ -321,6 +338,47 @@ export function buildAcceptanceReport(wsDir: string): {
     });
   }
 
+  // Gate 7: Visual Acceptance
+  const visualRes = run.visualAcceptanceResult as {
+    status?: "PASS" | "FAIL" | "UNCERTAIN";
+    reportPath?: string;
+    reportSha256?: string;
+    summary?: {
+      total: number;
+      passed: number;
+      failed: number;
+      uncertain: number;
+    };
+    contractHash?: string;
+  } | undefined;
+
+  let gate7Decision: "pass" | "fail" | "skipped" = "skipped";
+  if (visualRes) {
+    if (visualRes.status === "PASS") {
+      gate7Decision = "pass";
+    } else {
+      gate7Decision = "fail";
+      blockers.push(`Gate 7 (visualAcceptance) failed with status "${visualRes.status}".`);
+    }
+
+    evidenceList.push({
+      stage: "visual-acceptance",
+      status: gate7Decision === "pass" ? "passed" : "failed",
+      timestamp: now,
+      contractHash,
+      sourceBundleHash,
+      diagnostics: [
+        `Overall status: ${visualRes.status}`,
+        `Report SHA: ${visualRes.reportSha256 || "none"}`,
+        `Passed: ${visualRes.summary?.passed ?? 0}/${visualRes.summary?.total ?? 0}`,
+        `Failed: ${visualRes.summary?.failed ?? 0}`,
+        `Uncertain: ${visualRes.summary?.uncertain ?? 0}`,
+      ],
+      relevantArtifactPath: visualRes.reportPath,
+      evidenceType: "visual-acceptance-report",
+    });
+  }
+
   // Decisions & Final Status
   const gateDecisions: NativeAcceptanceGateDecisions = {
     contractValidation: gate1Pass ? "pass" : "fail",
@@ -329,6 +387,7 @@ export function buildAcceptanceReport(wsDir: string): {
     quickGuiBuild: gate4Decision,
     launchSmokeTest: gate5Decision,
     runtimeEvidence: gate6Decision,
+    visualAcceptance: gate7Decision,
   };
 
   let status: NativeAcceptanceStatus;
@@ -346,13 +405,16 @@ export function buildAcceptanceReport(wsDir: string): {
     status = "launch-failed";
   } else if (gate6Decision === "fail") {
     status = "evidence-failed";
+  } else if (gate7Decision === "fail") {
+    status = "visual-failed";
   } else if (
     gate1Pass &&
     gate2Pass &&
     gate3Decision === "pass" &&
     gate4Decision === "pass" &&
     gate5Decision === "pass" &&
-    (gate6Decision === "pass" || gate6Decision === "skipped")
+    (gate6Decision === "pass" || gate6Decision === "skipped") &&
+    (gate7Decision === "pass" || gate7Decision === "skipped")
   ) {
     status = "accepted";
     accepted = true;
@@ -442,6 +504,7 @@ export function buildAcceptanceReport(wsDir: string): {
       executableSha256: artifactSha256,
       previewSha256: smoke?.previewSha256,
       evidenceManifestSha256: evidenceRes?.manifestSha256,
+      visualAcceptanceReportSha256: visualRes?.reportSha256,
     },
     runtimeEvidence: evidenceRes ? {
       status: evidenceRes.status === "PASS" ? "pass" : evidenceRes.status === "FAIL" ? "fail" : "uncertain",
@@ -453,6 +516,13 @@ export function buildAcceptanceReport(wsDir: string): {
         interaction: "skipped",
         persistence: "skipped",
       },
+    } : undefined,
+    visualAcceptance: visualRes ? {
+      status: visualRes.status === "PASS" ? "pass" : visualRes.status === "FAIL" ? "fail" : "uncertain",
+      contractHash: visualRes.contractHash,
+      reportRef: "artifacts/visual-acceptance.json",
+      reportSha256: visualRes.reportSha256,
+      summary: visualRes.summary,
     } : undefined,
     provenanceDigest,
     evaluatedAt: now,

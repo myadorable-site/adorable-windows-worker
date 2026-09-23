@@ -229,6 +229,26 @@ export async function fetchAndVerifySourceBundle(): Promise<{
     console.log(`[Fetch] Staged RuntimeEvidenceContract at ${evidenceContractPath}`);
   }
 
+  // Stage VisualAcceptanceContract if present in metadata or from canonical fallback
+  let visualAcceptanceContract = meta.visualAcceptanceContract;
+  if (!visualAcceptanceContract && inputs.generationContractHash === "h-e44a337649b66028") {
+    const canonicalPath = join(import.meta.dir, "canonical-visual-contract.json");
+    if (existsSync(canonicalPath)) {
+      try {
+        visualAcceptanceContract = JSON.parse(readFileSync(canonicalPath, "utf8"));
+        console.log(`[Fetch] Loaded canonical VisualAcceptanceContract for ${inputs.generationContractHash}`);
+      } catch (err) {
+        console.warn(`[Fetch] Failed to parse canonical visual contract: ${err}`);
+      }
+    }
+  }
+
+  if (visualAcceptanceContract && typeof visualAcceptanceContract === "object") {
+    const visualContractPath = join(wsDir, "visual-acceptance-contract.json");
+    writeFileSync(visualContractPath, JSON.stringify(visualAcceptanceContract, null, 2), "utf8");
+    console.log(`[Fetch] Staged VisualAcceptanceContract at ${visualContractPath}`);
+  }
+
   saveRunResult({
     filesStaged: count,
     sourceVerified: true,
@@ -239,6 +259,7 @@ export async function fetchAndVerifySourceBundle(): Promise<{
     targetArch: inputs.targetArch,
     provenanceInputs,
     runtimeEvidenceContract,
+    visualAcceptanceContract,
   });
 
   console.log(`[Fetch] Staged ${count} verified source files. Canonical hash: ${computedHash}`);
